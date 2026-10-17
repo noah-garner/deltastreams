@@ -1,0 +1,13 @@
+[project]
+name = "market-event-lakehouse"
+version = "0.1.0"
+description = "Clickstream lakehouse pipeline"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+    "pyspark==3.5.0",
+    "delta-spark==3.1.0",
+    "databricks-sdk>=0.18.0",
+    "ipykernel>=6.0.0",
+    "pandas>=2.0.0",
+    "pyarrow>=12.0.0",
+]

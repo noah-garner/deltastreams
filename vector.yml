@@ -1,0 +1,22 @@
+data_dir: "/var/lib/vector"
+
+sources:
+  udp_in:
+    type: "socket"
+    mode: "udp"
+    address: "0.0.0.0:5140"
+    decoding:
+      codec: "bytes"
+
+sinks:
+  kafka_out:
+    type: "kafka"
+    inputs: ["udp_in"]
+    bootstrap_servers: "kafka:29092"
+    topic: "network-telemetry"
+    encoding:
+      codec: "json"
+      
+api:
+  enabled: true
+  address: "0.0.0.0:8686"

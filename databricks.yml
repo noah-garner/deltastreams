@@ -1,0 +1,86 @@
+bundle:
+  name: deltastreams
+
+variables:
+  schema_name:
+    description: Target schema for Unity Catalog
+    default: bronze
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      schema_name: bronze
+
+resources:
+  schemas:
+    default_schema:
+      name: "${var.schema_name}"
+      catalog_name: main
+
+  volumes:
+    clickstream_volume:
+      name: clickstream_volume
+      catalog_name: main
+      schema_name: "${var.schema_name}"
+      volume_type: MANAGED
+
+  jobs:
+    clickstream_pipeline:
+      name: "[${bundle.environment}] Clickstream Pipeline"
+      tasks:
+        - task_key: run_bronze_ingestion
+          environment_key: default
+          spark_python_task:
+            python_file: src/01_bronze_autoloader.py
+            parameters:
+              - "--source_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/landing_zone"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/checkpoints/bronze_ingest"
+              - "--target_table"
+              - "main.${resources.schemas.default_schema.name}.bronze_clickstream"
+              - "--target_path"
+              - ""
+              - "--format_type"
+              - "cloudFiles"
+
+        - task_key: run_silver_cleansing
+          environment_key: default
+          depends_on:
+            - task_key: run_bronze_ingestion
+          spark_python_task:
+            python_file: src/02_silver_cleansing.py
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.bronze_clickstream"
+              - "--silver_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clickstream"
+              - "--dlq_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clickstream_dlq"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/checkpoints"
+
+    udp_stream_pipeline:
+      name: "[${bundle.environment}] UDP Stream Pipeline"
+      tasks:
+        - task_key: run_kafka_bronze_ingestion
+          environment_key: default
+          spark_python_task:
+            python_file: src/01_bronze_kafka_ingest.py
+            parameters:
+              - "--bootstrap_servers"
+              - "kafka:29092"
+              - "--topic"
+              - "network-telemetry"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/checkpoints/kafka_bronze"
+              - "--target_table"
+              - "main.${resources.schemas.default_schema.name}.kafka_bronze_clickstream"
+
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "1"

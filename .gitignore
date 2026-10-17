@@ -1,0 +1,16 @@
+# Virtual Environments & Caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.vscode/
+
+# Databricks & Local Runtime
+.databricks/
+spark-warehouse/
+scratch/
+
+# Local Data & Checkpoints
+data/
+*.csv
+*.parquet
