@@ -1,4 +1,4 @@
-# DeltaStreams 🚀
+# DeltaStreams
 
 > **A unified, production-grade edge-to-lakehouse streaming reference architecture built with Databricks Asset Bundles (DABs), Auto Loader, Vector, Redpanda, and Delta Lake.**
 
@@ -6,73 +6,55 @@
 
 ## Architecture Overview
 
-DeltaStreams demonstrates a fault-tolerant, multi-track **Medallion Architecture** handling both application file ingestion and volatile, high-velocity network packet streams without breaking downstream production tables.
+DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture** that processes high-velocity network telemetry streams and enforces structural data quality gates without disrupting downstream analytics.
 
 ```text
-  TRACK 1: FILE INGESTION                      TRACK 2: NETWORK TELEMETRY
-┌───────────────────────────┐                 ┌───────────────────────────┐
-│Stream Replayer (Kaggle)   │                 │ Python UDP Packet Blaster │
-└─────────────┬─────────────┘                 └─────────────┬─────────────┘
-              │                                             │ (Raw Syslog UDP Strings)
-              ▼                                             ▼
-┌───────────────────────────┐                 ┌───────────────────────────┐
-│   Landing Zone (Volume)   │                 │   Vector Edge Listener    │
-└─────────────┬─────────────┘                 └─────────────┬─────────────┘
-              │ (Auto Loader)                               │ (JSON Format Translation)
-              ▼                                             ▼
-┌───────────────────────────┐                 ┌───────────────────────────┐
-│ Bronze Layer: Clickstream │                 │ Redpanda Broker (Kafka)   │
-└─────────────┬─────────────┘                 └─────────────┬─────────────┘
-              │                                             │ (Streaming Spark Query)
-              │                                             ▼
-              │                               ┌───────────────────────────┐
-              │                               │   Bronze Layer: Kafka     │
-              │                               └─────────────┬─────────────┘
-              │                                             │
-              └──────────────────────┬──────────────────────┘
-                                     │
-                                     ▼
-            ┌──────────────────────────────────────────────────────────┐
-            │                    Silver Cleansing                      │
-            │     (Try Cast, Watermarking, Deduplication & Schema)     │
-            └───────────────────┬─────────────────┬────────────────────┘
-                                │                 │
-                    Valid Data  │                 │ Corrupt / Failed
-                                ▼                 ▼
-                ┌─────────────────────────┐   ┌─────────────────────────┐
-                │      Silver Valid       │   │       Silver DLQ        │
-                │   (Liquid Clustering)   │   │     (Error Capture)     │
-                └─────────────────────────┘   └─────────────────────────┘
+    ┌─────────────────────────────────────────────────────────┐
+    │              Python UDP Packet Blaster                  │
+    └────────────────────────────┬────────────────────────────┘
+                                 │ (Raw Syslog UDP Strings)
+                                 ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │                Vector Edge Listener                     │
+    └────────────────────────────┬────────────────────────────┘
+                                 │ (Zero-JVM Protocol Translation)
+                                 ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │               Redpanda Broker (Kafka API)               │
+    └────────────────────────────┬────────────────────────────┘
+                                 │ (Incremental Spark Stream Scan)
+                                 ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │               Bronze Layer: Kafka Ingest                │
+    └────────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │                    Silver Cleansing                     │
+    │     (Schema Enforcement, Regex Casting & Validation)    │
+    └───────────────────┬─────────────────┬───────────────────┘
+                        │                 │
+            Valid Data  │                 │ Corrupt / Failed
+                        ▼                 ▼
+        ┌─────────────────────────┐   ┌─────────────────────────┐
+        │      Silver Clean       │   │    Silver DLQ (Table)   │
+        │   (Kafka Silver Clean)  │   │   (Kafka Silver DLQ)    │
+        └───────────────┬─────────┘   └─────────────────────────┘
+                        │
+                        ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │                Gold Layer: Threat Alerts                │
+    │        (Time-Series Windowed Threat Aggregations)       │
+    └─────────────────────────────────────────────────────────┘
 ```
 
 ## Key Features
 
-* **Dual-Track Streaming Engine:** Accommodates high-volume file ingestion via Databricks Auto Loader alongside continuous live message streams via native Kafka/Redpanda integrations.
-* **Zero JVM Ingestion Plane:** Uses an ultra-lightweight Rust daemon (**Vector**) to process UDP logs at the edge and pipes them into a high-throughput C++ broker (**Redpanda**), keeping edge memory overhead near zero.
-* **Zero Pipeline Crashes (DLQ Routing):** Uses `try_cast` and explicit error checks to route unparseable or corrupted stream payloads (like intentional `CORRUPT_BYTE_STREAM` lines) to a dedicated Dead Letter Queue while clean data flows continuously.
-* **Late-Arriving Data Management:** Configured with 10-minute watermarking and event-time deduplication to handle out-of-order logs across web and infrastructure components.
-* **High-Performance Storage:** Leverages Liquid Clustering (`CLUSTER BY (event_date, event_type)`) in Unity Catalog for optimal query performance.
-* **Databricks Asset Bundles:** Entire workflow is declarative, versioned, and deployable across cloud environments via CLI bundle commands.
-
-## Repository Structure
-
-```text
-.
-├── notebooks/
-│   ├── 01_query_bronze.ipynb       # Inspect file & kafka bronze layer row counts
-│   └── 02_query_silver.ipynb       # Inspect cleansed valid data and DLQ records
-├── src/
-│   ├── 00_network_udp_blaster.py   # Raw network infrastructure UDP simulator
-│   ├── 00_stream_replayer.py       # Micro-batch stream generator (Kaggle dataset)
-│   ├── 01_bronze_autoloader.py     # Auto Loader file ingestion into Delta Lake
-│   ├── 01_bronze_kafka_ingest.py   # Continuous Spark Kafka stream ingestion
-│   └── 02_silver_cleansing.py      # Transformations, Watermarking, & DLQ split
-├── databricks.yml                  # Databricks Asset Bundle deployment config
-├── docker-compose.yml              # Single-core developer Redpanda & Vector stack
-├── pyproject.toml                  # Project dependencies managed via uv
-├── vector.yml                      # Edge pipeline routing and socket configuration
-└── README.md
-```
+* **Zero JVM Ingestion Plane:** Uses an ultra-lightweight Rust daemon (**Vector**) to process high-throughput UDP syslog packages at the network edge, keeping client memory footprints near zero.
+* **Asynchronous Event Buffering:** Utilizes a distributed **Redpanda Cloud** cluster to provide structural backpressure control, ensuring zero loss of stream data even if downstream analytics compute nodes are offline.
+* **Defensive Pipeline Protections (DLQ Routing):** Employs explicit structural checks to route malformed or broken payload strings containing `CORRUPT_BYTE_STREAM` to an isolated Dead Letter Queue while valid packets flow smoothly.
+* **Stateful Streaming Aggregations:** Computes real-time rolling metrics in the Gold layer to flag distributed network brute-force security threats crossing defined volume thresholds.
+* **Databricks Asset Bundles (DABs):** Entire workflow architecture is versioned, declarative, and managed via CLI environment configurations (`.env.local` vs. `.env.cloud`).
 
 ## Quickstart
 
@@ -84,86 +66,113 @@ DeltaStreams demonstrates a fault-tolerant, multi-track **Medallion Architecture
 
     * Docker and Docker Compose (for local stream testing)
 
-2. Local Setup & Simulation
+2. Run Locally
 
     ```bash
-        # Step 1: Install dependencies
-        uv sync
+        # Local Dev
+        alias ds-local='source .env.local && docker compose --env-file .env.local down --remove-orphans && docker compose --env-file .env.local up -d --build'
+        run `ds-local`
 
-        # Step 2: Run the stream replayer to generate local landing zone batches
-        uv run src/00_stream_replayer.py
+        # Run udp_blaster
+        uv run src/00_network_udp_blaster.py
 
-        # Step 3: Run Bronze Auto Loader ingestion
-        uv run src/01_bronze_autoloader.py \
-            --source_path "data/landing_zone" \
-            --checkpoint_path "data/checkpoints/bronze_ingest" \
-            --target_table "bronze_clickstream" \
-            --target_path "data/tables/bronze_clickstream" \
-            --format_type "json"
+        # Run Bronze Kafka Ingest
+        uv run src/01_bronze_kafka_ingest.py \
+        --bootstrap_servers "localhost:9092" \
+        --topic "network-telemetry" \
+        --checkpoint_path "data/checkpoints/kafka_bronze" \
+        --target_table "bronze_kafka_stream" \
+        --target_path "data/tables/bronze_kafka_stream" \
+        --format_type "json"
 
-        # Step 4: Run Silver Cleansing, Deduplication, and DLQ routing
-        uv run src/02_silver_cleansing.py \
-            --source_table "data/tables/bronze_clickstream" \
-            --silver_table "data/tables/silver_clickstream" \
-            --dlq_table "data/tables/silver_clickstream_dlq" \
-            --checkpoint_path "data/checkpoints" \
-            --is_local
+        # Run Silver
+        uv run src/02_silver_kafka_cleansing.py \
+        --source_table "data/tables/kafka_bronze_clickstream" \
+        --silver_table "data/tables/silver_kafka_stream" \
+        --dlq_table "data/tables/silver_kafka_stream_dlq" \
+        --checkpoint_path "data/checkpoints/silver_kafka" \
+        --is_local
+
+        # Run Gold
+        uv run src/03_gold_security_alerts.py \    
+        --source_table "data/tables/silver_kafka_stream" \
+        --gold_table "data/tables/gold_security_alerts" \
+        --checkpoint_path "data/checkpoints/gold_security" \
+        --is_local
     ```
 
 3. Inspect Data Locally
 
-    Open the provided Jupyter notebooks to query and validate the results across layers:
-
-    * notebooks/01_query_bronze.ipynb
-
-    * notebooks/02_query_silver.ipynb
+    Open the provided Jupyter notebooks under `/notebooks` to query and validate the results across each layer.
 
 4. Deploy to Databricks
 
     ```bash
 
-        # Step 1. Generate local micro-batches
+        # Cloud Dev
+        alias ds-cloud='source .env.cloud && docker compose --env-file .env.cloud down --remove-orphans && docker compose --env-file .env.cloud up -d --build'
+        run `ds-cloud`
+
+        # Step 1. Generate local micro-batches, ctrl+c when you're done generating batches
         uv run src/00_stream_replayer.py
 
-        # Step 2. Validate bundle configuration
-        databricks bundle validate
-
-        # Step 3. Deploy bundle to development target
-        databricks bundle deploy -t dev
-
-        # Step 4. Upload local batches to UC volume 
-        # (dev target uses schema: dev_<username>_bronze)
-        databricks fs cp -r data/landing_zone \
-        dbfs:/Volumes/main/<your_dev_schema>/clickstream_volume/landing_zone
-
-        # Step 5. Run the deployed pipeline
-        databricks bundle run -t dev clickstream_medallion_pipeline
+        # Step 2. Deploy bundle and run job
+        databricks bundle deploy && databricks bundle run udp_stream_pipeline
     ```
 
-## Quickstart - UDP Stream
+5. Query Delta Tables
 
-Commands:
+    ```sql
+        -- Describe the structural layout of your active bronze stream table
+        DESCRIBE EXTENDED main.bronze.kafka_bronze_clickstream;
 
-```bash
-# Restart containers
-docker compose down && docker compose up -d
+        -- Query the contents of your bronze data layer
+        SELECT * FROM main.bronze.kafka_bronze_clickstream LIMIT 10;
 
-# Inspect Vector
-docker exec -it docker-vector-1 vector tap
+        -- Inspect your Clean Silver Table to confirm regex parsing and try_cast performance
+        SELECT host, source_type, src_ip, dst_ip, protocol, src_port, dst_port, _processed_at 
+        FROM main.bronze.kafka_silver_clean 
+        LIMIT 20;
 
-# Run udp_blaster
-uv run src/00_network_udp_blaster.py
+        -- Inspect your Dead Letter Queue to verify the corrupt packet isolation
+        SELECT host, port, message, _dlq_reason, _processed_at 
+        FROM main.bronze.kafka_silver_dlq 
+        LIMIT 20;
 
-# Run Bronze Kafka Ingest
-uv run src/01_bronze_kafka_ingest.py \
-  --bootstrap_servers "localhost:9092" \
-  --topic "network-telemetry" \
-  --checkpoint_path "data/checkpoints/kafka_bronze" \
-  --target_table "bronze_kafka_stream" \
-  --target_path "data/tables/bronze_kafka_stream" \
-  --format_type "json"
+        -- Check your active security alerts ordered by the highest violation volume
+        SELECT alert_window_start, alert_window_end, attacker_ip, protocol, request_count, _alert_triggered_at
+        FROM main.bronze.kafka_gold_security_alerts
+        ORDER BY request_count DESC;
 
-```
+        -- Run a verification query to see which IP addresses are generating the most overall traffic
+        SELECT src_ip, protocol, count(*) as total_packets
+        FROM main.bronze.kafka_silver_clean
+        WHERE src_ip IS NOT NULL 
+        AND src_ip != ''   -- This explicitly filters out the empty regex matches
+        GROUP BY src_ip, protocol
+        ORDER BY total_packets DESC;
+
+        -- Identifies malicious IP addresses generating more than 20 failed login attempts over a sliding time window.
+        SELECT 
+            window.start AS alert_window,
+            src_ip AS attacker_ip,
+            COUNT(*) AS total_brute_force_attempts,
+            COLLECT_SET(dpt) AS targeted_ports,
+            'CRITICAL BRUTE FORCE DETECTED' AS incident_status
+        FROM main.dev.gold_security_alerts
+        GROUP BY src_ip, window
+        HAVING total_brute_force_attempts > 20
+        ORDER BY total_brute_force_attempts DESC;
+
+        -- Displays the unparseable, malformed data records that were safely isolated from the main analytics path.
+        SELECT 
+            timestamp,
+            raw_payload,
+            error_message,
+            'PIPELINE PROTECTED' AS isolation_status
+        FROM main.dev.silver_kafka_stream_dlq
+        LIMIT 5;
+    ```
 
 ## Feedback & Customer Discovery
 

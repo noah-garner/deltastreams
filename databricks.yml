@@ -4,14 +4,20 @@ bundle:
 variables:
   schema_name:
     description: Target schema for Unity Catalog
-    default: bronze
+    default: dev
+  rp_bootstrap_servers:
+    description: Redpanda Cloud bootstrap connection string
+  rp_user:
+    description: Redpanda Cloud username
+  rp_password:
+    description: Redpanda Cloud password
 
 targets:
-  dev:
-    mode: development
+  prod:
+    mode: production
     default: true
-    variables:
-      schema_name: bronze
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
 
 resources:
   schemas:
@@ -20,65 +26,65 @@ resources:
       catalog_name: main
 
   volumes:
-    clickstream_volume:
-      name: clickstream_volume
+    udp_stream_volume:
+      name: udp_stream_volume
       catalog_name: main
       schema_name: "${var.schema_name}"
       volume_type: MANAGED
 
   jobs:
-    clickstream_pipeline:
-      name: "[${bundle.environment}] Clickstream Pipeline"
-      tasks:
-        - task_key: run_bronze_ingestion
-          environment_key: default
-          spark_python_task:
-            python_file: src/01_bronze_autoloader.py
-            parameters:
-              - "--source_path"
-              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/landing_zone"
-              - "--checkpoint_path"
-              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/checkpoints/bronze_ingest"
-              - "--target_table"
-              - "main.${resources.schemas.default_schema.name}.bronze_clickstream"
-              - "--target_path"
-              - ""
-              - "--format_type"
-              - "cloudFiles"
-
-        - task_key: run_silver_cleansing
-          environment_key: default
-          depends_on:
-            - task_key: run_bronze_ingestion
-          spark_python_task:
-            python_file: src/02_silver_cleansing.py
-            parameters:
-              - "--source_table"
-              - "main.${resources.schemas.default_schema.name}.bronze_clickstream"
-              - "--silver_table"
-              - "main.${resources.schemas.default_schema.name}.silver_clickstream"
-              - "--dlq_table"
-              - "main.${resources.schemas.default_schema.name}.silver_clickstream_dlq"
-              - "--checkpoint_path"
-              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/checkpoints"
-
     udp_stream_pipeline:
       name: "[${bundle.environment}] UDP Stream Pipeline"
       tasks:
         - task_key: run_kafka_bronze_ingestion
-          environment_key: default
+          environment_key: "default"
           spark_python_task:
             python_file: src/01_bronze_kafka_ingest.py
             parameters:
               - "--bootstrap_servers"
-              - "kafka:29092"
+              - "${var.rp_bootstrap_servers}"
               - "--topic"
               - "network-telemetry"
               - "--checkpoint_path"
-              - "/Volumes/main/${resources.schemas.default_schema.name}/clickstream_volume/checkpoints/kafka_bronze"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/kafka_bronze"
               - "--target_table"
               - "main.${resources.schemas.default_schema.name}.kafka_bronze_clickstream"
+              - "--format_type"
+              - "cloudFiles"
+              - "--sasl_user"
+              - "${var.rp_user}"
+              - "--sasl_password"
+              - "${var.rp_password}"
 
+        - task_key: run_kafka_silver_cleansing
+          depends_on:
+            - task_key: run_kafka_bronze_ingestion
+          environment_key: "default"
+          spark_python_task:
+            python_file: "src/02_silver_kafka_cleansing.py"
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.kafka_bronze_clickstream"
+              - "--silver_table"
+              - "main.${resources.schemas.default_schema.name}.kafka_silver_clean"
+              - "--dlq_table"
+              - "main.${resources.schemas.default_schema.name}.kafka_silver_dlq"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/kafka_silver"
+
+        - task_key: run_kafka_gold_analysis
+          depends_on:
+            - task_key: run_kafka_silver_cleansing
+          environment_key: "default"
+          spark_python_task:
+            python_file: "src/03_gold_security_alerts.py"
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.kafka_silver_clean"
+              - "--gold_table"
+              - "main.${resources.schemas.default_schema.name}.kafka_gold_security_alerts"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/kafka_gold"
 
       environments:
         - environment_key: default

@@ -12,11 +12,20 @@ sinks:
   kafka_out:
     type: "kafka"
     inputs: ["udp_in"]
-    bootstrap_servers: "kafka:29092"
+    bootstrap_servers: "${BUNDLE_VAR_rp_bootstrap_servers}"
     topic: "network-telemetry"
     encoding:
       codec: "json"
-      
+
+    tls:
+      enabled: ${VECTOR_RP_SECURITY}
+
+    sasl:
+      enabled: ${VECTOR_RP_SECURITY}
+      mechanism: "SCRAM-SHA-256"
+      username: "${BUNDLE_VAR_rp_user}"
+      password: "${BUNDLE_VAR_rp_password}"
+
 api:
   enabled: true
   address: "0.0.0.0:8686"
