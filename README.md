@@ -114,7 +114,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
         run `ds-cloud`
 
         # Step 1. Generate local micro-batches, ctrl+c when you're done generating batches
-        uv run src/00_stream_replayer.py
+        uv run src/00_network_udp_blaster.py
 
         # Step 2. Deploy bundle and run job
         databricks bundle deploy && databricks bundle run udp_stream_pipeline
