@@ -173,9 +173,3 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
         FROM main.dev.silver_kafka_stream_dlq
         LIMIT 5;
     ```
-
-## Feedback & Customer Discovery
-
-This project is an open-source reference architecture built to explore streaming data quality patterns on Databricks.
-
-Have feedback or handle clickstream data differently? **Feel free to open an Issue or PR.**
