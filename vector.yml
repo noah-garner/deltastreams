@@ -1,25 +1,22 @@
 data_dir: "/var/lib/vector"
 
 sources:
-  udp_in:
-    type: "socket"
-    mode: "udp"
-    address: "0.0.0.0:5140"
-    decoding:
-      codec: "bytes"
+  telemetry_in:
+    type: "file"
+    include:
+      - "/var/log/auth.log"
+    read_from: "end"
 
 sinks:
   kafka_out:
     type: "kafka"
-    inputs: ["udp_in"]
+    inputs: ["telemetry_in"]
     bootstrap_servers: "${BUNDLE_VAR_rp_bootstrap_servers}"
     topic: "network-telemetry"
     encoding:
       codec: "json"
-
     tls:
       enabled: ${VECTOR_RP_SECURITY}
-
     sasl:
       enabled: ${VECTOR_RP_SECURITY}
       mechanism: "SCRAM-SHA-256"

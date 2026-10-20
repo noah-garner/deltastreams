@@ -1,0 +1,19 @@
+vector - telemtry in (auth log) -> kafka out (redpanda)
+
+the schema in redpanda ingress come from vector's native file source engine
+
+when your script boots vector and points it at var/log/auth.log using your vector.yml, 
+vector's internal engine wraps every raw text string it reads into a structured JSON 
+wrapper object. 
+It automatically injects the following telemtry tracking fields
+    "host" populate automatically by reading the systems hostname kernel var
+    "file": automatically logs the exact string path of the source data stream being evaluated
+    "message": contains raw timestamped ssh auth log payload fro mthe op system
+    "timestamp": precise UTC timestamp logging the exact millisecond vector 
+
+so vector just makes auth log super easy to digest and pipe to redpanda
+it behaves like a high-performance native pipeline that wraps complex messy system logs into structured json
+payloads automitcally using almost zero memory
+
+by leveraging vector at the edge tier, you've kept your distributed architecture simple, highly scalble, and
+extremely cheap to run

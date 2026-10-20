@@ -9,11 +9,7 @@
 DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture** that processes high-velocity network telemetry streams and enforces structural data quality gates without disrupting downstream analytics.
 
 ```text
-    ┌─────────────────────────────────────────────────────────┐
-    │              Python UDP Packet Blaster                  │
-    └────────────────────────────┬────────────────────────────┘
-                                 │ (Raw Syslog UDP Strings)
-                                 ▼
+
     ┌─────────────────────────────────────────────────────────┐
     │                Vector Edge Listener                     │
     └────────────────────────────┬────────────────────────────┘
@@ -36,12 +32,12 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
                         │                 │
             Valid Data  │                 │ Corrupt / Failed
                         ▼                 ▼
-        ┌─────────────────────────┐   ┌─────────────────────────┐
-        │      Silver Clean       │   │    Silver DLQ (Table)   │
-        │   (Kafka Silver Clean)  │   │   (Kafka Silver DLQ)    │
-        └───────────────┬─────────┘   └─────────────────────────┘
-                        │
-                        ▼
+    ┌─────────────────────────┐     ┌─────────────────────────┐
+    │      Silver Clean       │     │    Silver DLQ (Table)   │
+    │   (Kafka Silver Clean)  │     │   (Kafka Silver DLQ)    │
+    └───────────────┬─────────┘     └─────────────────────────┘
+                    │
+                    ▼
     ┌─────────────────────────────────────────────────────────┐
     │                Gold Layer: Threat Alerts                │
     │        (Time-Series Windowed Threat Aggregations)       │
@@ -54,7 +50,6 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 * **Asynchronous Event Buffering:** Utilizes a distributed **Redpanda Cloud** cluster to provide structural backpressure control, ensuring zero loss of stream data even if downstream analytics compute nodes are offline.
 * **Defensive Pipeline Protections (DLQ Routing):** Employs explicit structural checks to route malformed or broken payload strings containing `CORRUPT_BYTE_STREAM` to an isolated Dead Letter Queue while valid packets flow smoothly.
 * **Stateful Streaming Aggregations:** Computes real-time rolling metrics in the Gold layer to flag distributed network brute-force security threats crossing defined volume thresholds.
-* **Databricks Asset Bundles (DABs):** Entire workflow architecture is versioned, declarative, and managed via CLI environment configurations (`.env.local` vs. `.env.cloud`).
 
 ## Quickstart
 
@@ -64,17 +59,13 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
     * Python 3.10+ & uv package manager
 
-    * Docker and Docker Compose (for local stream testing)
-
 2. Run Locally
 
     ```bash
-        # Local Dev
-        alias ds-local='source .env.local && docker compose --env-file .env.local down --remove-orphans && docker compose --env-file .env.local up -d --build'
-        run `ds-local`
 
-        # Run udp_blaster
-        uv run src/00_network_udp_blaster.py
+        # We have real live honeypots feeding redpanda, no use for docker anymore
+        # Local test to pull real internet data straight from the cloud queue to test processing layers
+        ./scripts/deploy_grid.sh
 
         # Run Bronze Kafka Ingest
         uv run src/01_bronze_kafka_ingest.py \
@@ -108,15 +99,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 4. Deploy to Databricks
 
     ```bash
-
-        # Cloud Dev
-        alias ds-cloud='source .env.cloud && docker compose --env-file .env.cloud down --remove-orphans && docker compose --env-file .env.cloud up -d --build'
-        run `ds-cloud`
-
-        # Step 1. Generate local micro-batches, ctrl+c when you're done generating batches
-        uv run src/00_network_udp_blaster.py
-
-        # Step 2. Deploy bundle and run job
+        # Deploy bundle and run job
         databricks bundle deploy && databricks bundle run udp_stream_pipeline
     ```
 
