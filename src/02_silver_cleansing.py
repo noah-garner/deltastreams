@@ -56,6 +56,7 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
             .when(col("host") == "honeypot-edge-02", "US-EAST (NYC)")
             .when(col("host") == "honeypot-edge-03", "EU-WEST (AMS)")
             .otherwise("UNKNOWN_EDGE_REGION"))
+        .withColumn("timestamp", col("timestamp").cast("timestamp"))
         .withColumn("raw_user", regexp_extract(col("message"), regex_pattern, 1))
         .withColumn("targeted_username", trim(col("raw_user")))
         .withColumn("raw_ip", regexp_extract(col("message"), regex_pattern, 2))

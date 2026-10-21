@@ -85,7 +85,6 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
         --sasl_user $BUNDLE_VAR_rp_user \
         --sasl_password $BUNDLE_VAR_rp_password \
   
-
         # Run Silver (optional: --stream)
         uv run src/02_silver_cleansing.py \
         --source_table "data/tables/bronze_stream" \
@@ -122,6 +121,13 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
         # Deploy bundle and run udp_stream_pipeline
         databricks bundle deploy && databricks bundle run udp_stream_pipeline
+
+        # Run only gold task (maybe you want to rerun it as a stream intead of a batch)
+        databricks bundle run udp_stream_pipeline --only run_gold_analysis
+
+        # Run everything after a specific task (notice the "+") - runs silver -> gold
+        databricks bundle run udp_stream_pipeline --only run_silver_cleansing+
+
     ```
 
 NOTE:

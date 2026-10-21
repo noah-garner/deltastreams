@@ -25,20 +25,20 @@ def run_gold_security_analysis(spark_session, source_silver_table, target_gold_t
     silver_stream = spark_session.readStream.format("delta").load(src) if (is_local and not source_silver_table.startswith("main.")) else spark_session.readStream.table(source_silver_table)
 
     # 2. Watermark Management & Data Cleanliness Check
-    watermarked_stream = silver_stream.withWatermark("_processed_at", "10 minutes")
+    watermarked_stream = silver_stream.withWatermark("timestamp", "10 minutes")
     clean_ip_stream = watermarked_stream.filter(col("attacker_ip").isNotNull() & (col("attacker_ip") != ""))
 
-    # 3. Security Threat Stateful Window Aggregation
+    # 3. Security Threat Stateful Window Aggregation (Per Attacker IP)
     security_alerts_df = (clean_ip_stream
         .groupBy(
-            window(col("_processed_at"), "1 minute", "30 seconds"),
+            window(col("timestamp"), "1 minute", "30 seconds"),
             col("attacker_ip"),
             col("honeypot_region"),
             col("attacker_country"),
             col("attacker_country_code")
         )
         .agg(count("*").alias("request_count"))
-        .filter(col("request_count") >= 3) # Lowered to 3 for snappy local testing drops
+        .filter(col("request_count") >= 3)
         .select(
             col("window.start").alias("alert_window_start"),
             col("window.end").alias("alert_window_end"),
@@ -51,7 +51,6 @@ def run_gold_security_analysis(spark_session, source_silver_table, target_gold_t
         ))
 
     # 4. Storage Engine Core Execution Architecture
-    # Stateful aggregations require 'complete' outputMode to continually rewrite window calculations
     writer = security_alerts_df.writeStream.format("delta").option("checkpointLocation", cp).outputMode("complete")
     
     use_batch_trigger = (is_cloud or format_type == "delta") if not stream_mode else False
