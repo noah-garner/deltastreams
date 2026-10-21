@@ -136,6 +136,24 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
     ```
 
+5. Purge checkpoints and tables
+
+    Open a notebook, select the serverless compute (not sql warehouse), and run these commands in separate cells:
+
+    ```python
+        dbutils.fs.rm("dbfs:/Volumes/main/dev/udp_stream_volume/checkpoints/bronze", True)
+        dbutils.fs.rm("dbfs:/Volumes/main/dev/udp_stream_volume/checkpoints/silver", True)
+        dbutils.fs.rm("dbfs:/Volumes/main/dev/udp_stream_volume/checkpoints/gold", True)
+    ```
+
+    ```sql
+        %sql
+        TRUNCATE TABLE main.dev.bronze;
+        TRUNCATE TABLE main.dev.silver_clean;
+        TRUNCATE TABLE main.dev.silver_dlq;
+        TRUNCATE TABLE main.dev.gold_security_alerts;
+    ```
+
 ## Extra
 
 Databricks Cloud: Shifting streaming workloads to Serverless Compute utilizes the optimized `availableNow=True` micro-flush trigger coupled with a `continuous: {}` infrastructure job task framework to achieve infinite streaming latency without thread locking.
