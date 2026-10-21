@@ -108,7 +108,7 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
 
     for df, (target, cp) in writers.items():
         w = df.writeStream.format("delta").option("mergeSchema", "true").option("checkpointLocation", cp).outputMode("append")
-        w = w.trigger(availableNow=True) if use_batch_trigger else w.trigger(processingTime="5 seconds")
+        w = w.trigger(availableNow=True)
         if not is_cloud and target:
             w = w.option("path", str(Path(target).resolve()))
         q = w.start() if (not is_cloud and target and not target.startswith("main.")) else w.toTable(target)

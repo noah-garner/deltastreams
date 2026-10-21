@@ -5,12 +5,24 @@ variables:
   schema_name:
     description: Target schema for Unity Catalog
     default: dev
+  # -----------------------------------------------------------------------------------
+  # Populated by .env using Databrick's prepended BUNDLE_VAR_
+  # -----------------------------------------------------------------------------------
   rp_bootstrap_servers:
     description: Redpanda Cloud bootstrap connection string
+    default: ""
   rp_user:
     description: Redpanda Cloud username
+    default: ""
   rp_password:
     description: Redpanda Cloud password
+    default: ""
+  # -----------------------------------------------------------------------------------
+  # Control streaming: `databricks bundle deploy --var="stream_status=UNPAUSED"`
+  # -----------------------------------------------------------------------------------
+  stream_status:
+    description: "Continuous trigger status"
+    default: "PAUSED"
 
 targets:
   prod:
@@ -33,10 +45,10 @@ resources:
       volume_type: MANAGED
 
   jobs:
-
-    # =========================================================================
+  
+    # --------------------------------------------------------------------------
     # JOB 1: Standalone GeoIP Dimension Builder (Run once or on demand)
-    # =========================================================================
+    # --------------------------------------------------------------------------
     build_geoip_dimension:
       name: "[${bundle.target}] Build GeoIP Dimension Lookup"
       environments:
@@ -54,18 +66,18 @@ resources:
               - "--target"
               - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
 
-    # =========================================================================
-    # JOB 2: Main Continuous Stream Pipeline (Your main runtime DAG)
-    # ====================================================================
-    udp_stream_pipeline:
-      name: "[${bundle.environment}] UDP Stream Pipeline"
+    # --------------------------------------------------------------------------
+    # JOB 2: Sequential Batch Pipeline (Local Verification & Cold Resets)
+    # --------------------------------------------------------------------------
+    udp_batch_pipeline:
+      name: "[${bundle.environment}] UDP Batch Execution Pipeline"
       environments:
         - environment_key: default
           spec:
             environment_version: "2"
       tasks:
         - task_key: run_bronze_ingest
-          environment_key: "default"
+          environment_key: default
           spark_python_task:
             python_file: src/01_bronze_ingest.py
             parameters:
@@ -87,9 +99,9 @@ resources:
         - task_key: run_silver_cleansing
           depends_on:
             - task_key: run_bronze_ingest
-          environment_key: "default"
+          environment_key: default
           spark_python_task:
-            python_file: "src/02_silver_cleansing.py"
+            python_file: src/02_silver_cleansing.py
             parameters:
               - "--source_table"
               - "main.${resources.schemas.default_schema.name}.bronze"
@@ -105,9 +117,9 @@ resources:
         - task_key: run_gold_analysis
           depends_on:
             - task_key: run_silver_cleansing
-          environment_key: "default"
+          environment_key: default
           spark_python_task:
-            python_file: "src/03_gold_security_alerts.py"
+            python_file: src/03_gold_security_alerts.py
             parameters:
               - "--source_table"
               - "main.${resources.schemas.default_schema.name}.silver_clean"
@@ -115,3 +127,68 @@ resources:
               - "main.${resources.schemas.default_schema.name}.gold_security_alerts"
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
+
+    # --------------------------------------------------------------------------
+    # JOB 3: Infinite Streaming Pipeline
+    # --------------------------------------------------------------------------
+    udp_stream_pipeline:
+      name: "[${bundle.environment}] UDP Stream Active Pipeline"
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+      continuous:
+        pause_status: "${var.stream_status}"
+      tasks:
+        - task_key: run_bronze_ingest
+          environment_key: default
+          spark_python_task:
+            python_file: src/01_bronze_ingest.py
+            parameters:
+              - "--bootstrap_servers"
+              - "${var.rp_bootstrap_servers}"
+              - "--topic"
+              - "network-telemetry"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/bronze"
+              - "--target_table"
+              - "main.${resources.schemas.default_schema.name}.bronze"
+              - "--format_type"
+              - "cloudFiles"
+              - "--sasl_user"
+              - "${var.rp_user}"
+              - "--sasl_password"
+              - "${var.rp_password}"
+              - "--stream" # <--- Injected directly to activate infinite loops
+
+        - task_key: run_silver_cleansing
+          # NO depends_on constraints: boots instantly in parallel
+          environment_key: default
+          spark_python_task:
+            python_file: src/02_silver_cleansing.py
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.bronze"
+              - "--geoip_table"
+              - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
+              - "--silver_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clean"
+              - "--dlq_table"
+              - "main.${resources.schemas.default_schema.name}.silver_dlq"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/silver"
+              - "--stream" # <--- Injected directly to activate infinite loops
+
+        - task_key: run_gold_analysis
+          # NO depends_on constraints: boots instantly in parallel
+          environment_key: default
+          spark_python_task:
+            python_file: src/03_gold_security_alerts.py
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clean"
+              - "--gold_table"
+              - "main.${resources.schemas.default_schema.name}.gold_security_alerts"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
+              - "--stream" # <--- Injected directly to activate infinite loops

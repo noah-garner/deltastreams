@@ -1,6 +1,6 @@
 # DeltaStreams
 
-> **A unified, production-grade edge-to-lakehouse streaming reference architecture built with Databricks Asset Bundles (DABs), Auto Loader, Vector, Redpanda, and Delta Lake.**
+> **A unified, production-grade edge-to-lakehouse streaming reference architecture built with Databricks Automation Bundles (DABs), Vector Edge Listeners, Redpanda Brokers, and Delta Lake.**
 
 ---
 
@@ -11,30 +11,30 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 ```text
 
     ┌─────────────────────────────────────────────────────────┐
-    │                Vector Edge Listener                     │
+    │                Vector Edge Listener (DI Droplets)       │
     └────────────────────────────┬────────────────────────────┘
-                                 │ (Zero-JVM Protocol Translation)
+                                 │ 
                                  ▼
     ┌─────────────────────────────────────────────────────────┐
     │               Redpanda Broker (Kafka API)               │
     └────────────────────────────┬────────────────────────────┘
-                                 │ (Incremental Spark Stream Scan)
+                                 │ 
                                  ▼
     ┌─────────────────────────────────────────────────────────┐
-    │               Bronze Layer: Kafka Ingest                │
+    │               Bronze Ingest (Databricks)                │
     └────────────────────────────┬────────────────────────────┘
                                  │
                                  ▼
     ┌─────────────────────────────────────────────────────────┐
     │                    Silver Cleansing                     │
-    │     (Schema Enforcement, Regex Casting & Validation)    │
+    │     (Schema Enforcement, DLQ, GEOIP Mapping)            │
     └───────────────────┬─────────────────┬───────────────────┘
                         │                 │
-            Valid Data  │                 │ Corrupt / Failed
+            Valid Data  │                 │ Corrupt / Failed / Garbage
                         ▼                 ▼
     ┌─────────────────────────┐     ┌─────────────────────────┐
     │      Silver Clean       │     │    Silver DLQ (Table)   │
-    │   (Kafka Silver Clean)  │     │   (Kafka Silver DLQ)    │
+    │                         │     │                         │
     └───────────────┬─────────┘     └─────────────────────────┘
                     │
                     ▼
@@ -46,9 +46,9 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
 ## Key Features
 
-* **Vector Ingestion Plane:** Uses an ultra-lightweight Rust daemon (**Vector**) to process high-throughput UDP syslog packages at the network edge, keeping client memory footprints near zero.
+* **Vector Ingestion Plane:** Uses an ultra-lightweight Rust daemon (Vector) to securely tail native Linux host authentication logs (/var/log/auth.log) directly at the machine layer to process high-throughput UDP syslog packages at the network edge, keeping client memory footprints near zero.
 * **Asynchronous Event Buffering:** Utilizes a distributed **Redpanda Cloud** cluster to provide structural backpressure control, ensuring zero loss of stream data even if downstream analytics compute nodes are offline.
-* **Defensive Pipeline Protections (DLQ Routing):** Employs explicit structural checks to route malformed or broken payload strings containing `CORRUPT_BYTE_STREAM` to an isolated Dead Letter Queue while valid packets flow smoothly.
+* **Defensive Pipeline Protections (DLQ Routing):** Employs explicit structural checks to route malformed or broken payload strings to an isolated Dead Letter Queue while valid packets flow smoothly.
 * **Stateful Streaming Aggregations:** Computes real-time rolling metrics in the Gold layer to flag distributed network brute-force security threats crossing defined volume thresholds.
 
 ## Quickstart
@@ -59,7 +59,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
     * Python 3.10+ & uv package manager
 
-    * Redpanda Account & existing `network-telemetry` topic
+    * Redpanda Account & existing `network-telemetry` topic with open read write permissions on current user.
 
 2. Run Locally
 
@@ -119,21 +119,33 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
         # Deploy bundle and run build_geoip_dimension (Do this whenever you update your geoip files)
         databricks bundle deploy && databricks bundle run build_geoip_dimension
 
-        # Deploy bundle and run udp_stream_pipeline
+        # Deploy and execute a sequential batch run
+        databricks bundle deploy && databricks bundle run udp_batch_pipeline
+
+        # Deploy and activate the infinite live streaming pipeline
         databricks bundle deploy && databricks bundle run udp_stream_pipeline
 
-        # Run only gold task (maybe you want to rerun it as a stream intead of a batch)
+        # Control Stream behavior for udp stream pipeline. Note this will immediately stream each task!
+        databricks bundle deploy --var="stream_status=UNPAUSED"
+
+        # Batch: Run only gold task
         databricks bundle run udp_stream_pipeline --only run_gold_analysis
 
-        # Run everything after a specific task (notice the "+") - runs silver -> gold
+        # Batch: Run everything after a specific task (notice the "+") - runs silver -> gold
         databricks bundle run udp_stream_pipeline --only run_silver_cleansing+
 
     ```
 
-NOTE:
+## Extra
+
+Databricks Cloud: Shifting streaming workloads to Serverless Compute utilizes the optimized `availableNow=True` micro-flush trigger coupled with a `continuous: {}` infrastructure job task framework to achieve infinite streaming latency without thread locking.
 
 The stream flag --stream:
 
 Local Machine --stream unset reads earliest offset, processing 1 at a time. Set reads latest waiting for new data
 
-Databricks Cloud --stream unset processes all accumlated messasges. Set streams continuously from earliest.
+Databricks Cloud --stream unset processes all accumlated messasges. Set streams continuously from latest.
+
+## Issues and Requests
+
+Feel free to clone the repo and try it yourself. If you run into any bugs or have feature requests, do not hesitate to open a PR. Happy streaming!

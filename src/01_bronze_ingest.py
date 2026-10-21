@@ -61,7 +61,7 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
     # Check execution boundaries to configure engine triggers
     # If stream_mode is turned on, force use_batch_trigger to False everywhere
     use_batch_trigger = (is_cloud or format_type == "json") if not stream_mode else False
-    writer = writer.trigger(availableNow=True) if use_batch_trigger else writer.trigger(processingTime="5 seconds")
+    writer = writer.trigger(availableNow=True)
     
     if target_path and not is_cloud:
         writer = writer.option("path", str(Path(target_path).resolve()))
