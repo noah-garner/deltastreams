@@ -59,15 +59,21 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
     * Python 3.10+ & uv package manager
 
+    * Redpanda Account & existing `network-telemetry` topic
+
 2. Run Locally
 
     ```bash
 
-        # We have real live honeypots feeding redpanda, no use for docker anymore
+        # source .env so bronze ingest can reach redpanda and so vector.yml can produce to redpanda
+        source .env
+
+        # Deploy vector to digital ocean droplets (make sure to update .ssh/config with each droplet ip)
         # Local test to pull real internet data straight from the cloud queue to test processing layers
         ./scripts/deploy_grid.sh
 
-        source .env
+        # buld geoip hash lookup table locally
+        uv run src/00_build_geoip.py
 
         # Run Bronze Ingest (optional: --stream)
         uv run src/01_bronze_ingest.py \
@@ -104,7 +110,17 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 4. Deploy to Databricks
 
     ```bash
-        # Deploy bundle and run job
+
+        # source .env so db.yml sees your redpanda user,pass,bootstrap
+        source .env
+
+        # Copy geoip files to cloud volume (clear other dirs from data first)
+        databricks fs cp -r ./data/ dbfs:/Volumes/main/dev/udp_stream_volume/raw_sources/
+
+        # Deploy bundle and run build_geoip_dimension (Do this whenever you update your geoip files)
+        databricks bundle deploy && databricks bundle run build_geoip_dimension
+
+        # Deploy bundle and run udp_stream_pipeline
         databricks bundle deploy && databricks bundle run udp_stream_pipeline
     ```
 
