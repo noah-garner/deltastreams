@@ -46,7 +46,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
 ## Key Features
 
-* **Zero JVM Ingestion Plane:** Uses an ultra-lightweight Rust daemon (**Vector**) to process high-throughput UDP syslog packages at the network edge, keeping client memory footprints near zero.
+* **Vector Ingestion Plane:** Uses an ultra-lightweight Rust daemon (**Vector**) to process high-throughput UDP syslog packages at the network edge, keeping client memory footprints near zero.
 * **Asynchronous Event Buffering:** Utilizes a distributed **Redpanda Cloud** cluster to provide structural backpressure control, ensuring zero loss of stream data even if downstream analytics compute nodes are offline.
 * **Defensive Pipeline Protections (DLQ Routing):** Employs explicit structural checks to route malformed or broken payload strings containing `CORRUPT_BYTE_STREAM` to an isolated Dead Letter Queue while valid packets flow smoothly.
 * **Stateful Streaming Aggregations:** Computes real-time rolling metrics in the Gold layer to flag distributed network brute-force security threats crossing defined volume thresholds.
@@ -67,28 +67,33 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
         # Local test to pull real internet data straight from the cloud queue to test processing layers
         ./scripts/deploy_grid.sh
 
-        # Run Bronze Kafka Ingest
-        uv run src/01_bronze_kafka_ingest.py \
-        --bootstrap_servers "localhost:9092" \
-        --topic "network-telemetry" \
-        --checkpoint_path "data/checkpoints/kafka_bronze" \
-        --target_table "bronze_kafka_stream" \
-        --target_path "data/tables/bronze_kafka_stream" \
-        --format_type "json"
+        source .env
 
-        # Run Silver
-        uv run src/02_silver_kafka_cleansing.py \
-        --source_table "data/tables/kafka_bronze_clickstream" \
-        --silver_table "data/tables/silver_kafka_stream" \
-        --dlq_table "data/tables/silver_kafka_stream_dlq" \
-        --checkpoint_path "data/checkpoints/silver_kafka" \
+        # Run Bronze Ingest (optional: --stream)
+        uv run src/01_bronze_ingest.py \
+        --bootstrap_servers $BUNDLE_VAR_rp_bootstrap_servers \
+        --topic "network-telemetry" \
+        --checkpoint_path "data/checkpoints/bronze" \
+        --target_table "bronze_stream" \
+        --target_path "data/tables/bronze_stream" \
+        --sasl_user $BUNDLE_VAR_rp_user \
+        --sasl_password $BUNDLE_VAR_rp_password \
+  
+
+        # Run Silver (optional: --stream)
+        uv run src/02_silver_cleansing.py \
+        --source_table "data/tables/bronze_stream" \
+        --geoip_table "data/tables/dim_geoip_lookup" \
+        --silver_table "data/tables/silver_clean" \
+        --dlq_table "data/tables/silver_dlq" \
+        --checkpoint_path "data/checkpoints/silver" \
         --is_local
 
-        # Run Gold
-        uv run src/03_gold_security_alerts.py \    
-        --source_table "data/tables/silver_kafka_stream" \
-        --gold_table "data/tables/gold_security_alerts" \
-        --checkpoint_path "data/checkpoints/gold_security" \
+        # Run Gold (optional: --stream)
+        uv run src/03_gold_security_alerts.py \
+        --source_table "data/tables/silver_clean" \
+        --gold_table "data/tables/gold_alerts" \
+        --checkpoint_path "data/checkpoints/gold" \
         --is_local
     ```
 
@@ -103,56 +108,10 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
         databricks bundle deploy && databricks bundle run udp_stream_pipeline
     ```
 
-5. Query Delta Tables
+NOTE:
 
-    ```sql
-        -- Describe the structural layout of your active bronze stream table
-        DESCRIBE EXTENDED main.bronze.kafka_bronze_clickstream;
+The stream flag --stream:
 
-        -- Query the contents of your bronze data layer
-        SELECT * FROM main.bronze.kafka_bronze_clickstream LIMIT 10;
+Local Machine --stream unset reads earliest offset, processing 1 at a time. Set reads latest waiting for new data
 
-        -- Inspect your Clean Silver Table to confirm regex parsing and try_cast performance
-        SELECT host, source_type, src_ip, dst_ip, protocol, src_port, dst_port, _processed_at 
-        FROM main.bronze.kafka_silver_clean 
-        LIMIT 20;
-
-        -- Inspect your Dead Letter Queue to verify the corrupt packet isolation
-        SELECT host, port, message, _dlq_reason, _processed_at 
-        FROM main.bronze.kafka_silver_dlq 
-        LIMIT 20;
-
-        -- Check your active security alerts ordered by the highest violation volume
-        SELECT alert_window_start, alert_window_end, attacker_ip, protocol, request_count, _alert_triggered_at
-        FROM main.bronze.kafka_gold_security_alerts
-        ORDER BY request_count DESC;
-
-        -- Run a verification query to see which IP addresses are generating the most overall traffic
-        SELECT src_ip, protocol, count(*) as total_packets
-        FROM main.bronze.kafka_silver_clean
-        WHERE src_ip IS NOT NULL 
-        AND src_ip != ''   -- This explicitly filters out the empty regex matches
-        GROUP BY src_ip, protocol
-        ORDER BY total_packets DESC;
-
-        -- Identifies malicious IP addresses generating more than 20 failed login attempts over a sliding time window.
-        SELECT 
-            window.start AS alert_window,
-            src_ip AS attacker_ip,
-            COUNT(*) AS total_brute_force_attempts,
-            COLLECT_SET(dpt) AS targeted_ports,
-            'CRITICAL BRUTE FORCE DETECTED' AS incident_status
-        FROM main.dev.gold_security_alerts
-        GROUP BY src_ip, window
-        HAVING total_brute_force_attempts > 20
-        ORDER BY total_brute_force_attempts DESC;
-
-        -- Displays the unparseable, malformed data records that were safely isolated from the main analytics path.
-        SELECT 
-            timestamp,
-            raw_payload,
-            error_message,
-            'PIPELINE PROTECTED' AS isolation_status
-        FROM main.dev.silver_kafka_stream_dlq
-        LIMIT 5;
-    ```
+Databricks Cloud --stream unset processes all accumlated messasges. Set streams continuously from earliest.

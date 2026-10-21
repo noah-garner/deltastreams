@@ -5,7 +5,7 @@ __pycache__/
 .pytest_cache/
 .vscode/
 .env
-.env.*
+notes.txt
 
 # Databricks & Local Runtime
 .databricks/

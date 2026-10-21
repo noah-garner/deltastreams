@@ -17,3 +17,15 @@ payloads automitcally using almost zero memory
 
 by leveraging vector at the edge tier, you've kept your distributed architecture simple, highly scalble, and
 extremely cheap to run
+
+
+The Alert Threshold Metric
+
+Notice Romania only shows up twice. This is because the request count occurs in this 30 second time window
+Notice it is the only one to trigger the gold script. Because we ahrd coded .filter(col("request_count") >= 3)
+
+Essentially what our gold is showing is only the "coordinated attacks" or attacks that seem to
+hammer repetitively instead of one off "blips" like from Indonesia, US, South Korea
+
+So silver is showing everything, but nice and cleaned. 
+Gold is showing the "coordinated" attacks. i mean end to end, 
