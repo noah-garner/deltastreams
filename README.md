@@ -110,29 +110,26 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
     ```bash
 
-        # source .env so db.yml sees your redpanda user,pass,bootstrap
-        source .env
-
         # Copy geoip files to cloud volume (clear other dirs from data first)
         databricks fs cp -r ./data/ dbfs:/Volumes/main/dev/udp_stream_volume/raw_sources/
 
         # Deploy bundle and run build_geoip_dimension (Do this whenever you update your geoip files)
-        databricks bundle deploy && databricks bundle run build_geoip_dimension
+        (set -a; source .env; databricks bundle deploy && databricks bundle run build_geoip_dimension)
 
         # Deploy and execute a sequential batch run
-        databricks bundle deploy && databricks bundle run udp_batch_pipeline
+        (set -a; source .env; databricks bundle deploy && databricks bundle run udp_batch_pipeline)
 
-        # Deploy and activate the infinite live streaming pipeline (executes 1 task at each layer and pauses)
-        databricks bundle deploy && databricks bundle run udp_stream_pipeline
+        # Deploy and activate the infinite live streaming pipeline (executes 1 task at each layer and pause)
+        (set -a; source .env; databricks bundle deploy && databricks bundle run udp_stream_pipeline)
 
         # Control Stream behavior for udp stream pipeline. Note this will immediately stream each task!
-        databricks bundle deploy --var="stream_status=UNPAUSED"
+        (set -a; source .env; databricks bundle deploy --var="stream_status=UNPAUSED")
 
         # Batch: Run only gold task
-        databricks bundle run udp_stream_pipeline --only run_gold_analysis
+        (set -a; source .env; databricks bundle run udp_stream_pipeline --only run_gold_analysis)
 
         # Batch: Run everything after a specific task (notice the "+") - runs silver -> gold
-        databricks bundle run udp_stream_pipeline --only run_silver_cleansing+
+        (set -a; source .env; databricks bundle run udp_stream_pipeline --only run_silver_cleansing+)
 
     ```
 

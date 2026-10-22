@@ -16,9 +16,9 @@ sinks:
     encoding:
       codec: "json"
     tls:
-      enabled: ${VECTOR_RP_SECURITY}
+      enabled: true
     sasl:
-      enabled: ${VECTOR_RP_SECURITY}
+      enabled: true
       mechanism: "SCRAM-SHA-256"
       username: "${BUNDLE_VAR_rp_user}"
       password: "${BUNDLE_VAR_rp_password}"

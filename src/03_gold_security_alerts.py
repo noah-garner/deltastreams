@@ -25,13 +25,13 @@ def run_gold_security_analysis(spark_session, source_silver_table, target_gold_t
     silver_stream = spark_session.readStream.format("delta").load(src) if (is_local and not source_silver_table.startswith("main.")) else spark_session.readStream.table(source_silver_table)
 
     # 2. Watermark Management & Data Cleanliness Check
-    watermarked_stream = silver_stream.withWatermark("timestamp", "10 minutes")
+    watermarked_stream = silver_stream.withWatermark("event_timestamp", "10 minutes")
     clean_ip_stream = watermarked_stream.filter(col("attacker_ip").isNotNull() & (col("attacker_ip") != ""))
 
     # 3. Security Threat Stateful Window Aggregation (Per Attacker IP)
     security_alerts_df = (clean_ip_stream
         .groupBy(
-            window(col("timestamp"), "1 minute", "30 seconds"),
+            window(col("event_timestamp"), "1 minute", "30 seconds"),
             col("attacker_ip"),
             col("honeypot_region"),
             col("attacker_country"),

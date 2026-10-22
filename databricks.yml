@@ -6,7 +6,7 @@ variables:
     description: Target schema for Unity Catalog
     default: dev
   # -----------------------------------------------------------------------------------
-  # Populated by .env using Databrick's prepended BUNDLE_VAR_
+  # Populated by .env using Databrick's prepended BUNDLE_VAR_ loader
   # -----------------------------------------------------------------------------------
   rp_bootstrap_servers:
     description: Redpanda Cloud bootstrap connection string
