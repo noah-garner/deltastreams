@@ -122,7 +122,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
         # Deploy and execute a sequential batch run
         databricks bundle deploy && databricks bundle run udp_batch_pipeline
 
-        # Deploy and activate the infinite live streaming pipeline
+        # Deploy and activate the infinite live streaming pipeline (executes 1 task at each layer and pauses)
         databricks bundle deploy && databricks bundle run udp_stream_pipeline
 
         # Control Stream behavior for udp stream pipeline. Note this will immediately stream each task!
@@ -163,6 +163,10 @@ The stream flag --stream:
 Local Machine --stream unset reads earliest offset, processing 1 at a time. Set reads latest waiting for new data
 
 Databricks Cloud --stream unset processes all accumlated messasges. Set streams continuously from latest.
+
+Another note: Running `databricks bundle run udp_stream_pipeline` will only run each task once all in parallel, so
+it is likely gold and silver won't pickup data. This method may be not useful but it exists for now.
+So for now to trigger one load for each layer just use `databricks bundle deploy && databricks bundle run udp_batch_pipeline`.
 
 ## Issues and Requests
 

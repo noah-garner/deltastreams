@@ -5,7 +5,7 @@ sources:
     type: "file"
     include:
       - "/var/log/auth.log"
-    read_from: "end"
+    read_from: "beginning"
 
 sinks:
   kafka_out:
