@@ -47,6 +47,10 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
 
     valid_raw_df = base_enriched_df.filter(~is_initial_dlq)
 
+    filter_mock_data = ["demo", "demo_01"]
+    for term in filter_mock_data:
+        valid_raw_df = valid_raw_df.filter(~col("message").contains(term))
+
     regex_pattern = r"(?:Disconnected from (?:invalid user |authenticating user )?|Invalid user )([\w\-]+) from ([\d\.]+)"
 
     parsed_df = (valid_raw_df
@@ -68,7 +72,7 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
     clean_valid_df = parsed_df.filter(~is_regex_failed)
     
     regex_failed_dlq_df = parsed_df.filter(is_regex_failed).withColumn(
-        "_dlq_reason", F.lit("UNPARSEABLE_AUTH_LOG_STRUCTURE")
+        "_dlq_reason", F.lit("UNMATCHED_AUTH_EVENT_PATTERN")
     ).select(col("host"), col("file"), col("message"), col("event_timestamp"), col("_dlq_reason"))
 
     final_dlq_df = initial_dlq_df.select("host", "file", "message", "event_timestamp", "_dlq_reason") \

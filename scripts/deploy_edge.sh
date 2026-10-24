@@ -1,8 +1,4 @@
 #!/bin/bash
-# ==============================================================================
-# DELTASTREAMS: Edge Honeypot Provisioning & GitOps Deployment Automation Script
-# Usage: ./deploy_edge.sh <target_droplet_public_ip> <rp_user> <rp_password>
-# ==============================================================================
 
 TARGET_IP=$1
 RP_USER=$2
@@ -16,11 +12,11 @@ fi
 
 echo "Initiating Edge Deployment Sequence for root@${TARGET_IP}..."
 
-# #Provision target directories natively on the remote host
+# Provision target directories natively on the remote host
 echo "Syncing remote directory layouts..."
 ssh -i ~/.ssh/id_digitalocean -o StrictHostKeyChecking=no root@${TARGET_IP} "mkdir -p /etc/vector /var/lib/vector"
 
-# #Push your localized repository configurations up to the target machine via SCP
+# Push localized repository configurations up to the target machine via SCP
 echo "Uploading core configurations..."
 scp -i ~/.ssh/id_digitalocean ./vector.yml root@${TARGET_IP}:/etc/vector/vector.yaml
 
@@ -34,7 +30,7 @@ ENV_EOF
     chmod 600 /etc/vector/vector.env
 EOF
 
-# #Execute remote shell orchestration block to download and configure the engine
+# Execute remote shell orchestration block to download and configure the engine
 echo "Orchestrating remote installation and process structures..."
 ssh -i ~/.ssh/id_digitalocean root@${TARGET_IP} << 'REMOTE_EXEC'
     # Download and install Vector binary natively using Bash

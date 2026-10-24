@@ -95,14 +95,14 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
         --bootstrap_servers "dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092" \
         --topic "network-telemetry" \
         --checkpoint_path "data/checkpoints/bronze" \
-        --target_table "bronze_stream" \
+        --target_table "bronze_raw" \
         --target_path "data/tables/bronze_stream" \
         --sasl_user $RP_USER \
         --sasl_password $RP_PASSWORD
   
         # Run Silver (optional: --stream)
         uv run src/02_silver_cleansing.py \
-        --source_table "data/tables/bronze_stream" \
+        --source_table "data/tables/bronze_raw" \
         --geoip_table "data/tables/dim_geoip_lookup" \
         --silver_table "data/tables/silver_clean" \
         --dlq_table "data/tables/silver_dlq" \
@@ -178,7 +178,7 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
 
     ```sql
         %sql
-        TRUNCATE TABLE main.dev.bronze;
+        TRUNCATE TABLE main.dev.bronze_raw;
         TRUNCATE TABLE main.dev.silver_clean;
         TRUNCATE TABLE main.dev.silver_dlq;
         TRUNCATE TABLE main.dev.gold_security_alerts;

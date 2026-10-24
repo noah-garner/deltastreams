@@ -73,7 +73,7 @@ resources:
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/bronze"
               - "--target_table"
-              - "main.${resources.schemas.default_schema.name}.bronze"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
               - "--format_type"
               - "cloudFiles"
 
@@ -85,7 +85,7 @@ resources:
             python_file: src/02_silver_cleansing.py
             parameters:
               - "--source_table"
-              - "main.${resources.schemas.default_schema.name}.bronze"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
               - "--geoip_table"
               - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
               - "--silver_table"
@@ -131,7 +131,7 @@ resources:
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/bronze"
               - "--target_table"
-              - "main.${resources.schemas.default_schema.name}.bronze"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
               - "--format_type"
               - "cloudFiles"
               - "--stream" # Injected directly to activate infinite loops
@@ -142,7 +142,7 @@ resources:
             python_file: src/02_silver_cleansing.py
             parameters:
               - "--source_table"
-              - "main.${resources.schemas.default_schema.name}.bronze"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
               - "--geoip_table"
               - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
               - "--silver_table"
@@ -161,7 +161,7 @@ resources:
               - "--source_table"
               - "main.${resources.schemas.default_schema.name}.silver_clean"
               - "--gold_table"
-              - "main.${resources.schemas.default_schema.name}.gold_security_alerts"
+              - "main.${resources.schemas.default_schema.name}.gold_alerts"
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
               - "--stream"

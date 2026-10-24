@@ -1,7 +1,4 @@
 #!/bin/bash
-# ==============================================================================
-# DELTASTREAMS: Fleet Edge Core Deployment Orchestration Loop
-# ==============================================================================
 
 # Clear out any legacy host keys for these specific endpoints to bypass warnings
 for host in 167.71.156.175 157.245.209.237 134.122.61.153; do

@@ -1,8 +1,4 @@
 #!/bin/bash
-# ==============================================================================
-# DELTASTREAMS: Remote Droplet Environment Purge & Reset Tool
-# Usage: ./clear_droplet.sh <target_droplet_public_ip>
-# ==============================================================================
 
 TARGET_IP=$1
 if [ -z "$TARGET_IP" ]; then
