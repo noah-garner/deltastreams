@@ -8,7 +8,7 @@ def get_spark_session(format_type):
     if format_type == "cloudFiles":
         return SparkSession.builder.getOrCreate()
     from delta import configure_spark_with_delta_pip
-    builder = (SparkSession.builder.appName("DeltaStreams_Bronze_Ingestion")
+    builder = (SparkSession.builder.appName("DeltaStreams_Bronze_Ingestion_Engine")
         .master("local[*]")
         .config("spark.driver.memory", "4g")
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
@@ -72,7 +72,7 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
         query.awaitTermination()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DeltaStreams Core Bronze Engine")
+    parser = argparse.ArgumentParser(description="DeltaStreams Bronze Ingestion Engine")
     parser.add_argument("--bootstrap_servers", required=True)
     parser.add_argument("--topic", default="network-telemetry")
     parser.add_argument("--checkpoint_path", required=True)

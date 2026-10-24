@@ -8,7 +8,7 @@ def get_spark_session(format_type):
     if format_type == "cloudFiles":
         return SparkSession.builder.getOrCreate()
     from delta import configure_spark_with_delta_pip
-    builder = (SparkSession.builder.appName("DeltaStreams_Gold_Security_Alerts")
+    builder = (SparkSession.builder.appName("DeltaStreams_Gold_Alerts_Engine")
         .master("local[*]")
         .config("spark.driver.memory", "4g")
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
@@ -68,7 +68,7 @@ def run_gold_security_analysis(spark_session, source_silver_table, target_gold_t
         query.awaitTermination()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DeltaStreams Gold Security Alerts Engine")
+    parser = argparse.ArgumentParser(description="DeltaStreams Gold Alerts Engine")
     parser.add_argument("--source_table", required=True)
     parser.add_argument("--gold_table", required=True)
     parser.add_argument("--checkpoint_path", required=True)

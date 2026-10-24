@@ -10,7 +10,7 @@ def get_spark_session(format_type):
     if format_type == "cloudFiles":
         return SparkSession.builder.getOrCreate()
     from delta import configure_spark_with_delta_pip
-    builder = (SparkSession.builder.appName("DeltaStreams_Silver_Honeypot_Cleansing")
+    builder = (SparkSession.builder.appName("DeltaStreams_Silver_Cleansing_Engine")
         .master("local[*]")
         .config("spark.driver.memory", "4g")
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
@@ -126,7 +126,7 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
         for q in queries: q.awaitTermination()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Multi-Region Honeypot Ingestion Engine")
+    parser = argparse.ArgumentParser(description="DeltaStreams Silver Cleansing Engine")
     parser.add_argument("--source_table", required=True)
     parser.add_argument("--geoip_table", required=True)
     parser.add_argument("--silver_table", required=True)
