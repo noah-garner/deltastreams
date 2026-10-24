@@ -47,9 +47,15 @@ def run_gold_security_analysis(spark_session, source_silver_table, target_gold_t
         ))
 
     writer = security_alerts_df.writeStream.format("delta").option("checkpointLocation", cp).outputMode("complete")
-    
+
     use_batch_trigger = (is_cloud or format_type == "delta") if not stream_mode else False
-    writer = writer.trigger(availableNow=True)
+    if use_batch_trigger:
+        writer = writer.trigger(availableNow=True)
+    elif stream_mode:
+        if is_cloud:
+            writer = writer.trigger(availableNow=True)
+        else:
+            writer = writer.trigger(processingTime="2 seconds")
 
     if not is_cloud and target_gold_table:
         writer = writer.option("path", str(Path(target_gold_table).resolve()))

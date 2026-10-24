@@ -51,7 +51,7 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
         .withColumn("_ingested_at", current_timestamp()))
 
     writer = bronze_df.writeStream.format("delta").option("checkpointLocation", cp_path).option("mergeSchema", "true").outputMode("append")
-    
+
     use_batch_trigger = (is_cloud or format_type == "json") if not stream_mode else False
     if use_batch_trigger:
         writer = writer.trigger(availableNow=True)
@@ -60,7 +60,7 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
             writer = writer.trigger(availableNow=True)
         else:
             writer = writer.trigger(processingTime="2 seconds")
-    
+
     if target_path and not is_cloud:
         writer = writer.option("path", str(Path(target_path).resolve()))
 
