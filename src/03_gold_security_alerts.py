@@ -18,17 +18,13 @@ def get_spark_session(format_type):
 def run_gold_security_analysis(spark_session, source_silver_table, target_gold_table, checkpoint_path, format_type, is_local=False, stream_mode=False):
     cp = str(Path(checkpoint_path).resolve())
     is_cloud = (format_type == "cloudFiles" or "DATABRICKS_RUNTIME_VERSION" in os.environ)
-    print(f"Analyzing Silver telemetry logs from: {source_silver_table}")
 
-    # 1. Standardize Inbound Input Streams
     src = str(Path(source_silver_table).resolve()) if (is_local and not source_silver_table.startswith("main.")) else source_silver_table
     silver_stream = spark_session.readStream.format("delta").load(src) if (is_local and not source_silver_table.startswith("main.")) else spark_session.readStream.table(source_silver_table)
 
-    # 2. Watermark Management & Data Cleanliness Check
     watermarked_stream = silver_stream.withWatermark("event_timestamp", "10 minutes")
     clean_ip_stream = watermarked_stream.filter(col("attacker_ip").isNotNull() & (col("attacker_ip") != ""))
 
-    # 3. Security Threat Stateful Window Aggregation (Per Attacker IP)
     security_alerts_df = (clean_ip_stream
         .groupBy(
             window(col("event_timestamp"), "1 minute", "30 seconds"),
@@ -50,7 +46,6 @@ def run_gold_security_analysis(spark_session, source_silver_table, target_gold_t
             current_timestamp().alias("_alert_triggered_at")
         ))
 
-    # 4. Storage Engine Core Execution Architecture
     writer = security_alerts_df.writeStream.format("delta").option("checkpointLocation", cp).outputMode("complete")
     
     use_batch_trigger = (is_cloud or format_type == "delta") if not stream_mode else False
@@ -63,9 +58,7 @@ def run_gold_security_analysis(spark_session, source_silver_table, target_gold_t
 
     if use_batch_trigger:
         query.processAllAvailable()
-        print("Serverless gold metric rollup aggregation complete. States written to disk.")
     else:
-        print("Infinite gold analytics stream active. Awaiting telemetry windows...")
         query.awaitTermination()
 
 if __name__ == "__main__":

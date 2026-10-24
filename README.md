@@ -27,7 +27,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
                                  ▼
     ┌─────────────────────────────────────────────────────────┐
     │                    Silver Cleansing                     │
-    │     (Schema Enforcement, DLQ, GEOIP Mapping)            │
+    │          (Schema Enforcement, DLQ, GEOIP Mapping)       │
     └───────────────────┬─────────────────┬───────────────────┘
                         │                 │
             Valid Data  │                 │ Corrupt / Failed / Garbage
@@ -44,12 +44,33 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
     └─────────────────────────────────────────────────────────┘
 ```
 
+## Core Execution Strategy: Environment-Fluid Runtime
+
+To optimize development velocity and eliminate cloud compute waste, DeltaStreams implements a decoupled, environment-fluid trigger engine. The exact same business logic transitions seamlessly between local development and cloud production runtimes without code changes.
+
+```text
+
+          ┌──────────────────────────────────────────┐
+          │      STABLE STREAMING CORE PIPELINE      │
+          │   (readStream & writeStream DAG Logic)   │
+          └────────────────────┬─────────────────────┘
+                               │
+            ┌──────────────────┴──────────────────┐
+            ▼                                     ▼
+  [ LOCAL DEVELOPMENT ENGINE ]          [ CLOUD PRODUCTION RUNTIME ]
+  • Mode: Infinite Live Stream          • Mode: Serverless Macro-Loop
+  • Trigger: processingTime='2s'        • Trigger: availableNow=True
+  • Compute Cost: $0.00 (Native .venv)  • Compute Cost: Scale-to-Zero Managed
+  • Context: Rapid hot-reload testing   • Context: Production Databricks Jobs
+
+```
+
 ## Key Features
 
-* **Vector Ingestion Plane:** Uses an ultra-lightweight Rust daemon (Vector) to securely tail native Linux host authentication logs (/var/log/auth.log) directly at the machine layer to process high-throughput UDP syslog packages at the network edge, keeping client memory footprints near zero.
-* **Asynchronous Event Buffering:** Utilizes a distributed **Redpanda Cloud** cluster to provide structural backpressure control, ensuring zero loss of stream data even if downstream analytics compute nodes are offline.
-* **Defensive Pipeline Protections (DLQ Routing):** Employs explicit structural checks to route malformed or broken payload strings to an isolated Dead Letter Queue while valid packets flow smoothly.
-* **Stateful Streaming Aggregations:** Computes real-time rolling metrics in the Gold layer to flag distributed network brute-force security threats crossing defined volume thresholds.
+* **Vector Ingestion Plane:** Uses an ultra-lightweight Rust daemon (Vector) to securely tail native Linux host authentication logs (/var/log/auth.log) directly at the machine layer to process high-throughput UDP syslog packages at the network edge, keeping client memory footprints near zero. Wipes out the typical 15-40% resource tax that heavy legacy logging agents place on edge compute nodes.
+* **Asynchronous Event Buffering:** Utilizes a distributed **Redpanda Cloud** cluster to provide structural backpressure control, ensuring zero loss of stream data even if downstream analytics compute nodes are offline. Guarantees complete data resilience during cloud worker failovers or downstream maintenance windows without losing telemetry logs.
+* **Defensive Pipeline Protections (DLQ Routing):** Employs explicit structural checks to route malformed or broken payload strings to an isolated Dead Letter Queue while valid packets flow smoothly. Stops data pollution at the gateway layer, cutting unnecessary cloud processing compute bills caused by parsing unindexed malformed junk.
+* **Stateful Streaming Aggregations:** Computes real-time rolling metrics in the Gold layer to flag distributed network brute-force security threats crossing defined volume thresholds. Shifts heavy state analytics computation out of expensive downstream BI warehouses into optimized stream processing memory layers.
 
 ## Quickstart
 
@@ -65,25 +86,21 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
     ```bash
 
-        # source .env so bronze ingest can reach redpanda and so vector.yml can produce to redpanda
-        source .env
+        # Deploy vector to digital ocean droplets (make sure to update thre script's IP addresses)
+        set -a && source .env && set +a && ./scripts/deploy_grid.sh
 
-        # Deploy vector to digital ocean droplets (make sure to update .ssh/config with each droplet ip)
-        # Local test to pull real internet data straight from the cloud queue to test processing layers
-        ./scripts/deploy_grid.sh
-
-        # buld geoip hash lookup table locally
+        # Bulid geoip hash lookup table locally
         uv run src/00_build_geoip.py
 
         # Run Bronze Ingest (optional: --stream)
-        uv run src/01_bronze_ingest.py \
-        --bootstrap_servers $BUNDLE_VAR_rp_bootstrap_servers \
+        set -a && source .env && set +a && uv run src/01_bronze_ingest.py \
+        --bootstrap_servers "dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092" \
         --topic "network-telemetry" \
         --checkpoint_path "data/checkpoints/bronze" \
         --target_table "bronze_stream" \
         --target_path "data/tables/bronze_stream" \
-        --sasl_user $BUNDLE_VAR_rp_user \
-        --sasl_password $BUNDLE_VAR_rp_password \
+        --sasl_user $RP_USER \
+        --sasl_password $RP_PASSWORD
   
         # Run Silver (optional: --stream)
         uv run src/02_silver_cleansing.py \
@@ -108,34 +125,52 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
 4. Deploy to Databricks
 
+    Prerequisites: Secrets Configuration
+
+    Before deploying the pipeline to Databricks production targets, you must register your Redpanda Cloud credentials inside your workspace's native encrypted Secret Manager using the Databricks CLI.
+
+    ```bash
+        # 1. Create the secure isolated credential scope
+        databricks secrets create-scope deltastreams_scope
+
+        # 2. Put your username and password keys into the scope
+        databricks secrets put-secret deltastreams_scope redpanda_user --string-value "your-username"
+        databricks secrets put-secret deltastreams_scope redpanda_password --string-value "your-password"
+
+        # 3. (Optional) Verify your keys are registered successfully
+        databricks secrets list-secrets deltastreams_scope
+    ```
+
+    Detabricks Deploy CLI Commands:
+
     ```bash
 
         # Copy geoip files to cloud volume (clear other dirs from data first)
         databricks fs cp -r ./data/ dbfs:/Volumes/main/dev/udp_stream_volume/raw_sources/
 
         # Deploy bundle and run build_geoip_dimension (Do this whenever you update your geoip files)
-        (set -a; source .env; databricks bundle deploy && databricks bundle run build_geoip_dimension)
+        databricks bundle deploy -t prod && databricks bundle run build_geoip_dimension
 
         # Deploy and execute a sequential batch run
-        (set -a; source .env; databricks bundle deploy && databricks bundle run udp_batch_pipeline)
+        databricks bundle deploy -t prod && databricks bundle run udp_batch_pipeline
 
         # Deploy and activate the infinite live streaming pipeline (executes 1 task at each layer and pause)
-        (set -a; source .env; databricks bundle deploy && databricks bundle run udp_stream_pipeline)
+        databricks bundle deploy -t prod && databricks bundle run udp_stream_pipeline
 
         # Control Stream behavior for udp stream pipeline. Note this will immediately stream each task!
-        (set -a; source .env; databricks bundle deploy --var="stream_status=UNPAUSED")
+        databricks bundle deploy -t prod --var="stream_status=UNPAUSED"
 
         # Batch: Run only gold task
-        (set -a; source .env; databricks bundle run udp_stream_pipeline --only run_gold_analysis)
+        databricks bundle run udp_stream_pipeline --only run_gold_analysis
 
         # Batch: Run everything after a specific task (notice the "+") - runs silver -> gold
-        (set -a; source .env; databricks bundle run udp_stream_pipeline --only run_silver_cleansing+)
+        databricks bundle run udp_stream_pipeline --only run_silver_cleansing+
 
     ```
 
-5. Purge checkpoints and tables
+5. Infrastructure State Resets & Schema Evolution Testing
 
-    Open a notebook, select the serverless compute (not sql warehouse), and run these commands in separate cells:
+    Our architecture methodology includes non-destructive isolation pipelines. To simulate fresh environment provisioning or run validation suites against updated schema evolution rules, the following routine resets cluster state indicators cleanly. Open a notebook, select the serverless compute (not sql warehouse), and run these commands in separate cells:
 
     ```python
         dbutils.fs.rm("dbfs:/Volumes/main/dev/udp_stream_volume/checkpoints/bronze", True)
@@ -153,18 +188,20 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
 ## Extra
 
-Databricks Cloud: Shifting streaming workloads to Serverless Compute utilizes the optimized `availableNow=True` micro-flush trigger coupled with a `continuous: {}` infrastructure job task framework to achieve infinite streaming latency without thread locking.
-
 The stream flag --stream:
 
-Local Machine --stream unset reads earliest offset, processing 1 at a time. Set reads latest waiting for new data
+Local Machine --stream unset reads earliest offset, processing 1 at a time. Setting it reads latest waiting for new data
 
-Databricks Cloud --stream unset processes all accumlated messasges. Set streams continuously from latest.
+Databricks Cloud --stream unset processes all accumlated messasges. Seting it streams continuously from latest.
 
 Another note: Running `databricks bundle run udp_stream_pipeline` will only run each task once all in parallel, so
 it is likely gold and silver won't pickup data. This method may be not useful but it exists for now.
 So for now to trigger one load for each layer just use `databricks bundle deploy && databricks bundle run udp_batch_pipeline`.
 
-## Issues and Requests
+## Enterprise Architecture & Consulting
 
-Feel free to clone the repo and try it yourself. If you run into any bugs or have feature requests, do not hesitate to open a PR. Happy streaming!
+This repository serves as a reference blueprint for high-volume telemetry ingestion. We design, deploy, and audit custom real-time data platforms for enterprises looking to scale their stream infrastructure while dramatically reducing logging license costs.
+
+* **Need a production evaluation?** If your current system is bottlenecked by data latency or soaring infrastructure bills, contact our team to discuss an optimized architecture transformation.
+
+* **Get in Touch:** Connect with our principal architect on [LinkedIn](https://www.linkedin.com/in/noah-douglas-garner/) to schedule a brief technical exploration session.

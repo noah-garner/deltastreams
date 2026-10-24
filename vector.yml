@@ -11,7 +11,7 @@ sinks:
   kafka_out:
     type: "kafka"
     inputs: ["telemetry_in"]
-    bootstrap_servers: "${BUNDLE_VAR_rp_bootstrap_servers}"
+    bootstrap_servers: "dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092"
     topic: "network-telemetry"
     encoding:
       codec: "json"
@@ -20,8 +20,8 @@ sinks:
     sasl:
       enabled: true
       mechanism: "SCRAM-SHA-256"
-      username: "${BUNDLE_VAR_rp_user}"
-      password: "${BUNDLE_VAR_rp_password}"
+      username: "${RP_USER}"
+      password: "${RP_PASSWORD}"
 
 api:
   enabled: true

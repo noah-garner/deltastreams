@@ -18,9 +18,7 @@ def get_spark_session(format_type):
 def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_table, target_path=None, format_type="json", sasl_user=None, sasl_password=None, stream_mode=False):
     cp_path = str(Path(checkpoint_path).resolve())
     is_cloud = (format_type == "cloudFiles" or "DATABRICKS_RUNTIME_VERSION" in os.environ)
-    print(f"Reading active stream from Kafka broker: {bootstrap_servers} on topic: {topic}")
 
-    # 1. Dynamic Environment Strategy Matrix
     kafka_options = {
         "kafka.bootstrap.servers": bootstrap_servers,
         "subscribe": topic,
@@ -28,11 +26,9 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
         "failOnDataLoss": "false"
     }
 
-    # Apply performance throttle limit strictly when processing single micro-batch scratch runs locally
     if not is_cloud and not stream_mode:
         kafka_options["maxOffsetsPerTrigger"] = 1
 
-    # 2. Secure Redpanda Cloud SASL Configuration
     if "redpanda.com" in bootstrap_servers:
         user = sasl_user or os.getenv("REDPANDA_SASL_USER")
         pwd = sasl_password or os.getenv("REDPANDA_SASL_PASSWORD")
@@ -46,7 +42,6 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
             "kafka.sasl.jaas.config": f'{login_mod} required username="{user}" password="{pwd}";'
         })
 
-    # 3. Structural Data Frame Declarations
     bronze_df = (spark_session.readStream.format("kafka").options(**kafka_options).load()
         .selectExpr(
             "CAST(key AS STRING) as kafka_key",
@@ -55,13 +50,16 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
             "timestamp as kafka_timestamp")
         .withColumn("_ingested_at", current_timestamp()))
 
-    # 4. Storage Engine Core Lifecycles
     writer = bronze_df.writeStream.format("delta").option("checkpointLocation", cp_path).option("mergeSchema", "true").outputMode("append")
     
-    # Check execution boundaries to configure engine triggers
-    # If stream_mode is turned on, force use_batch_trigger to False everywhere
     use_batch_trigger = (is_cloud or format_type == "json") if not stream_mode else False
-    writer = writer.trigger(availableNow=True)
+    if use_batch_trigger:
+        writer = writer.trigger(availableNow=True)
+    elif stream_mode:
+        if is_cloud:
+            writer = writer.trigger(availableNow=True)
+        else:
+            writer = writer.trigger(processingTime="2 seconds")
     
     if target_path and not is_cloud:
         writer = writer.option("path", str(Path(target_path).resolve()))
@@ -70,9 +68,7 @@ def run_bronze(spark_session, bootstrap_servers, topic, checkpoint_path, target_
 
     if use_batch_trigger:
         query.processAllAvailable()
-        print("Bronze micro-batch ingestion complete. State data flushed successfully.")
     else:
-        print("Infinite live streaming engine active. Awaiting edge telemetry traffic...")
         query.awaitTermination()
 
 if __name__ == "__main__":
@@ -85,12 +81,27 @@ if __name__ == "__main__":
     parser.add_argument("--format_type", default="json")
     parser.add_argument("--sasl_user", default=None)
     parser.add_argument("--sasl_password", default=None)
-    # The Master Switch Flag: Defaults to single-batch mode unless explicitly called
     parser.add_argument("--stream", action="store_true", help="Activate infinite live streaming listener mode")
 
     args = parser.parse_args()
+
+    final_user = args.sasl_user
+    final_password = args.sasl_password
+
+    dbutils_runtime = globals().get("dbutils")
+    if dbutils_runtime and not final_user and not final_password:
+        final_user = dbutils_runtime.secrets.get(scope="deltastreams_scope", key="redpanda_user")
+        final_password = dbutils_runtime.secrets.get(scope="deltastreams_scope", key="redpanda_password")
+
     run_bronze(
-        get_spark_session(args.format_type), 
-        args.bootstrap_servers, args.topic, args.checkpoint_path, args.target_table, args.target_path, 
-        args.format_type, args.sasl_user, args.sasl_password, stream_mode=args.stream
+        spark_session=get_spark_session(args.format_type), 
+        bootstrap_servers=args.bootstrap_servers, 
+        topic=args.topic, 
+        checkpoint_path=args.checkpoint_path, 
+        target_table=args.target_table, 
+        target_path=args.target_path, 
+        format_type=args.format_type, 
+        sasl_user=final_user, 
+        sasl_password=final_password, 
+        stream_mode=args.stream
     )

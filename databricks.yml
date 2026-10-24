@@ -5,21 +5,10 @@ variables:
   schema_name:
     description: Target schema for Unity Catalog
     default: dev
-  # -----------------------------------------------------------------------------------
-  # Populated by .env using Databrick's prepended BUNDLE_VAR_ loader
-  # -----------------------------------------------------------------------------------
   rp_bootstrap_servers:
     description: Redpanda Cloud bootstrap connection string
-    default: ""
-  rp_user:
-    description: Redpanda Cloud username
-    default: ""
-  rp_password:
-    description: Redpanda Cloud password
-    default: ""
-  # -----------------------------------------------------------------------------------
+    default: "dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092"
   # Control streaming: `databricks bundle deploy --var="stream_status=UNPAUSED"`
-  # -----------------------------------------------------------------------------------
   stream_status:
     description: "Continuous trigger status"
     default: "PAUSED"
@@ -46,9 +35,7 @@ resources:
 
   jobs:
   
-    # --------------------------------------------------------------------------
-    # JOB 1: Standalone GeoIP Dimension Builder (Run once or on demand)
-    # --------------------------------------------------------------------------
+    # Job 0: Standalone GeoIP Dimension Builder (Run once or on demand)
     build_geoip_dimension:
       name: "[${bundle.target}] Build GeoIP Dimension Lookup"
       environments:
@@ -66,9 +53,7 @@ resources:
               - "--target"
               - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
 
-    # --------------------------------------------------------------------------
-    # JOB 2: Sequential Batch Pipeline (Local Verification & Cold Resets)
-    # --------------------------------------------------------------------------
+    # Job 1: Sequential Batch Pipeline (Local Verification & Cold Resets)
     udp_batch_pipeline:
       name: "[${bundle.environment}] UDP Batch Execution Pipeline"
       environments:
@@ -91,10 +76,6 @@ resources:
               - "main.${resources.schemas.default_schema.name}.bronze"
               - "--format_type"
               - "cloudFiles"
-              - "--sasl_user"
-              - "${var.rp_user}"
-              - "--sasl_password"
-              - "${var.rp_password}"
 
         - task_key: run_silver_cleansing
           depends_on:
@@ -128,9 +109,7 @@ resources:
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
 
-    # --------------------------------------------------------------------------
-    # JOB 3: Infinite Streaming Pipeline
-    # --------------------------------------------------------------------------
+    # Job 2: Infinite Streaming Pipeline
     udp_stream_pipeline:
       name: "[${bundle.environment}] UDP Stream Active Pipeline"
       environments:
@@ -155,14 +134,9 @@ resources:
               - "main.${resources.schemas.default_schema.name}.bronze"
               - "--format_type"
               - "cloudFiles"
-              - "--sasl_user"
-              - "${var.rp_user}"
-              - "--sasl_password"
-              - "${var.rp_password}"
-              - "--stream" # <--- Injected directly to activate infinite loops
+              - "--stream" # Injected directly to activate infinite loops
 
         - task_key: run_silver_cleansing
-          # NO depends_on constraints: boots instantly in parallel
           environment_key: default
           spark_python_task:
             python_file: src/02_silver_cleansing.py
@@ -177,10 +151,9 @@ resources:
               - "main.${resources.schemas.default_schema.name}.silver_dlq"
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/silver"
-              - "--stream" # <--- Injected directly to activate infinite loops
+              - "--stream"
 
         - task_key: run_gold_analysis
-          # NO depends_on constraints: boots instantly in parallel
           environment_key: default
           spark_python_task:
             python_file: src/03_gold_security_alerts.py
@@ -191,4 +164,4 @@ resources:
               - "main.${resources.schemas.default_schema.name}.gold_security_alerts"
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
-              - "--stream" # <--- Injected directly to activate infinite loops
+              - "--stream"

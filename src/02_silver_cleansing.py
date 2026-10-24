@@ -21,7 +21,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
     base_cp = str(Path(checkpoint_path).resolve())
     is_cloud = (format_type == "cloudFiles" or "DATABRICKS_RUNTIME_VERSION" in os.environ)
     
-    # 1. Standardize Stream Input Origins
     src = str(Path(source_table).resolve()) if (is_local and not source_table.startswith("main.")) else source_table
     stream = spark_session.readStream.format("delta").load(src) if (is_local and not source_table.startswith("main.")) else spark_session.readStream.table(source_table)
 
@@ -34,7 +33,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
 
     base_enriched_df = unpacked_df.withColumn("event_timestamp", split(col("message"), " ").getItem(0).cast("timestamp"))
 
-    # 2. Base Multi-Region DLQ Inbound Segmentation Rules (Initial Infrastructure Noise Filter)
     is_wrapper_corrupt = col("message").isNull()
     is_network_noise = col("message").contains("Received disconnect") | col("message").contains("Bye Bye")
     is_initial_dlq = is_wrapper_corrupt | is_network_noise
@@ -46,10 +44,13 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
             .otherwise("NETWORK_NOISE_DISCONNECT_WITHOUT_AUTH")
         )
     )
+
     valid_raw_df = base_enriched_df.filter(~is_initial_dlq)
 
-    # 3. Upgraded Token Extraction & Broad Regex Parsing (With Explicit Fallback Check)
-    # This upgraded expression catches both 'Disconnected from...' and 'Invalid user... from [IP]' log patterns cleanly
+    filter_mock_data = ["demo", "demo_01"]
+    for term in filter_mock_data:
+        valid_raw_df = valid_raw_df.filter(~col("message").contains(term))
+
     regex_pattern = r"(?:Disconnected from (?:invalid user |authenticating user )?|Invalid user )([\w\-]+) from ([\d\.]+)"
 
     parsed_df = (valid_raw_df
@@ -59,7 +60,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
             .when(col("host") == "honeypot-edge-02", "US-EAST (NYC)")
             .when(col("host") == "honeypot-edge-03", "EU-WEST (AMS)")
             .otherwise("UNKNOWN_EDGE_REGION"))
-        # Retain your core security profile regex parsing extractions
         .withColumn("raw_user", regexp_extract(col("message"), regex_pattern, 1))
         .withColumn("targeted_username", trim(col("raw_user")))
         .withColumn("raw_ip", regexp_extract(col("message"), regex_pattern, 2))
@@ -67,7 +67,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
         .withColumn("processed_at", current_timestamp())
     )
 
-    # 2. Update downstream DLQ quality check to reject rows where regex fails or yields null timestamps
     is_regex_failed = (col("attacker_ip") == "") | col("attacker_ip").isNull() | col("event_timestamp").isNull()
         
     clean_valid_df = parsed_df.filter(~is_regex_failed)
@@ -76,12 +75,10 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
         "_dlq_reason", F.lit("UNPARSEABLE_AUTH_LOG_STRUCTURE")
     ).select(col("host"), col("file"), col("message"), col("event_timestamp"), col("_dlq_reason"))
 
-    # Union your initial tracking noise rows with any regex failures into a single unified DLQ pipeline stream
     final_dlq_df = initial_dlq_df.select("host", "file", "message", "event_timestamp", "_dlq_reason") \
         .union(regex_failed_dlq_df) \
         .withColumn("_processed_at", current_timestamp())
 
-    # 4. Universal Geolocation IP Enrichment Layer (Numeric Scalar Math Join)
     geo_src = str(Path(geoip_table).resolve()) if (is_local and not geoip_table.startswith("main.")) else geoip_table
     dim_geoip_df = spark_session.read.format("delta").load(geo_src) if (is_local and not geoip_table.startswith("main.")) else spark_session.read.table(geoip_table)
 
@@ -104,9 +101,7 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
         col("country_code").alias("attacker_country_code")
     ).drop("message", "raw_ip", "raw_user", "attacker_ip_num")
 
-    # 5. Output Storage Target Delivery Routing
     writers = { enriched_valid_df: (silver_table, f"{base_cp}/clean"), final_dlq_df: (dlq_table, f"{base_cp}/dlq") }
-    # Ensure both local 'json' and 'delta' manual dev runs utilize the fast micro-batch loop
     use_batch_trigger = (is_cloud or format_type in ["json", "delta"]) if not stream_mode else False
     queries = []
 
@@ -120,9 +115,7 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
 
     if use_batch_trigger:
         for q in queries: q.processAllAvailable()
-        print("Silver transformation micro-batch completed successfully.")
     else:
-        print("Infinite silver stream active. Awaiting telemetry traffic...")
         for q in queries: q.awaitTermination()
 
 if __name__ == "__main__":
