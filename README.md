@@ -44,8 +44,6 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
     └─────────────────────────────────────────────────────────┘
 ```
 
-## Core Execution Strategy: Environment-Fluid Runtime
-
 To optimize development velocity and eliminate cloud compute waste, DeltaStreams implements a decoupled, environment-fluid trigger engine. The exact same business logic transitions seamlessly between local development and cloud production runtimes without code changes.
 
 ```text
