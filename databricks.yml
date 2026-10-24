@@ -8,7 +8,6 @@ variables:
   rp_bootstrap_servers:
     description: Redpanda Cloud bootstrap connection string
     default: "dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092"
-  # Control streaming: `databricks bundle deploy --var="stream_status=UNPAUSED"`
   stream_status:
     description: "Continuous trigger status"
     default: "PAUSED"
@@ -35,7 +34,7 @@ resources:
 
   jobs:
   
-    # Job 0: Standalone GeoIP Dimension Builder (Run once or on demand)
+    # Job 0: Standalone GeoIP Dimension Builder
     build_geoip_dimension:
       name: "[${bundle.target}] Build GeoIP Dimension Lookup"
       environments:
@@ -53,7 +52,7 @@ resources:
               - "--target"
               - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
 
-    # Job 1: Sequential Batch Pipeline (Local Verification & Cold Resets)
+    # Job 1: Sequential Batch Pipeline
     udp_batch_pipeline:
       name: "[${bundle.environment}] UDP Batch Execution Pipeline"
       environments:
@@ -105,11 +104,11 @@ resources:
               - "--source_table"
               - "main.${resources.schemas.default_schema.name}.silver_clean"
               - "--gold_table"
-              - "main.${resources.schemas.default_schema.name}.gold_security_alerts"
+              - "main.${resources.schemas.default_schema.name}.gold_alerts"
               - "--checkpoint_path"
               - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
 
-    # Job 2: Infinite Streaming Pipeline
+    # Job 2: Macro Loop Batch Pipeline
     udp_stream_pipeline:
       name: "[${bundle.environment}] UDP Stream Active Pipeline"
       environments:

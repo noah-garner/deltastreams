@@ -80,11 +80,13 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
 
     * Redpanda Account & existing `network-telemetry` topic with open read write permissions on current user.
 
+    * Atleast 1 Digital Ocean Droplet
+
 2. Run Locally
 
     ```bash
 
-        # Deploy vector to digital ocean droplets (make sure to update thre script's IP addresses)
+        # Deploy vector to digital ocean droplets (make sure to update the script's IP addresses)
         set -a && source .env && set +a && ./scripts/deploy_grid.sh
 
         # Bulid geoip hash lookup table locally
@@ -181,7 +183,7 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
         TRUNCATE TABLE main.dev.bronze_raw;
         TRUNCATE TABLE main.dev.silver_clean;
         TRUNCATE TABLE main.dev.silver_dlq;
-        TRUNCATE TABLE main.dev.gold_security_alerts;
+        TRUNCATE TABLE main.dev.gold_alerts;
     ```
 
 ## Extra
