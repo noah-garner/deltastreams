@@ -96,7 +96,7 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
         --topic "network-telemetry" \
         --checkpoint_path "data/checkpoints/bronze" \
         --target_table "bronze_raw" \
-        --target_path "data/tables/bronze_stream" \
+        --target_path "data/tables/bronze_raw" \
         --sasl_user $RP_USER \
         --sasl_password $RP_PASSWORD
   
