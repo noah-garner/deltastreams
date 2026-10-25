@@ -11,7 +11,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 ```text
 
     ┌─────────────────────────────────────────────────────────┐
-    │                Vector Edge Listener (DI Droplets)       │
+    │                Vector Edge Listener (DO Droplets)       │
     └────────────────────────────┬────────────────────────────┘
                                  │ 
                                  ▼
