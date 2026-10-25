@@ -202,7 +202,7 @@ So for now to trigger one load for each layer just use `databricks bundle deploy
 
 ## Enterprise Architecture & Consulting
 
-This repository is a specialized reference architecture for teams looking to orchestrate production-grade streaming pipelines using **Databricks Asset Bundles (DABs), PySpark Structured Streaming, and Redpanda**.
+This repository is a specialized reference architecture for teams looking to orchestrate production-grade streaming pipelines using **Databricks Automation Bundles (DABs), PySpark Structured Streaming, and Redpanda**.
 
 If you are trying to deploy a similar edge-to-lakehouse stack but are running into configuration issues, serverless task loop constraints, or pipeline errors, you can book a brief technical session with us to look over your setup.
 
