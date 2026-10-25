@@ -198,10 +198,13 @@ Another note: Running `databricks bundle run udp_stream_pipeline` will only run 
 it is likely gold and silver won't pickup data. This method may be not useful but it exists for now.
 So for now to trigger one load for each layer just use `databricks bundle deploy && databricks bundle run udp_batch_pipeline`.
 
+---
+
 ## Enterprise Architecture & Consulting
 
-This repository serves as a reference blueprint for high-volume telemetry ingestion. We design, deploy, and audit custom real-time data platforms for enterprises looking to scale their stream infrastructure while dramatically reducing logging license costs.
+This repository is a specialized reference architecture for teams looking to orchestrate production-grade streaming pipelines using **Databricks Asset Bundles (DABs), PySpark Structured Streaming, and Redpanda**.
 
-* **Need a production evaluation?** If your current system is bottlenecked by data latency or soaring infrastructure bills, contact our team to discuss an optimized architecture transformation.
+If you are trying to deploy a similar edge-to-lakehouse stack but are running into configuration issues, serverless task loop constraints, or pipeline errors, you can book a brief technical session with us to look over your setup.
 
-* **Get in Touch:** Connect with our principal architect on [LinkedIn](https://www.linkedin.com/in/noah-douglas-garner/) to schedule a brief technical exploration session.
+* **Custom Deployments:** Need to adapt this exact DAB blueprint, Vector edge config, or Redpanda stream pipeline to your own cloud infrastructure?
+* **Get in Touch:** Connect with our principal architect on [LinkedIn](https://www.linkedin.com/in/noah-douglas-garner/) or schedule a brief [Technical Exploration Call](https://calendly.com/noahdouglasgarner/initial-sync) to walk through your architecture.
