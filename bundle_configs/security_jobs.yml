@@ -1,0 +1,145 @@
+resources:
+  schemas:
+    default_schema:
+      name: "${var.schema_name}"
+      catalog_name: main
+
+  volumes:
+    udp_stream_volume:
+      name: udp_stream_volume
+      catalog_name: main
+      schema_name: "${var.schema_name}"
+      volume_type: MANAGED
+
+  jobs:
+  
+    # Job 0: Standalone GeoIP Dimension Builder
+    build_geoip_dimension:
+      name: "[${bundle.target}] Build GeoIP Dimension Lookup"
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+      tasks:
+        - task_key: compile_geoip_table
+          environment_key: "default"
+          spark_python_task:
+            python_file: ../src/security/00_build_geoip.py
+            parameters:
+              - "--source_dir"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/raw_sources"
+              - "--target"
+              - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
+
+    # Job 1: Sequential Batch Pipeline
+    udp_batch_pipeline:
+      name: "[${bundle.environment}] UDP Batch Execution Pipeline"
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+      tasks:
+        - task_key: run_bronze_ingest
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/security/01_bronze_ingest.py
+            parameters:
+              - "--bootstrap_servers"
+              - "${var.rp_bootstrap_servers}"
+              - "--topic"
+              - "network-telemetry"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/bronze"
+              - "--target_table"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
+              - "--format_type"
+              - "cloudFiles"
+
+        - task_key: run_silver_cleansing
+          depends_on:
+            - task_key: run_bronze_ingest
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/security/02_silver_cleansing.py
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
+              - "--geoip_table"
+              - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
+              - "--silver_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clean"
+              - "--dlq_table"
+              - "main.${resources.schemas.default_schema.name}.silver_dlq"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/silver"
+
+        - task_key: run_gold_analysis
+          depends_on:
+            - task_key: run_silver_cleansing
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/security/03_gold_security_alerts.py
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clean"
+              - "--gold_table"
+              - "main.${resources.schemas.default_schema.name}.gold_alerts"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
+
+    # Job 2: Macro Loop Batch Pipeline
+    udp_stream_pipeline:
+      name: "[${bundle.environment}] UDP Stream Active Pipeline"
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+      continuous:
+        pause_status: "${var.stream_status}"
+      tasks:
+        - task_key: run_bronze_ingest
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/security/01_bronze_ingest.py
+            parameters:
+              - "--bootstrap_servers"
+              - "${var.rp_bootstrap_servers}"
+              - "--topic"
+              - "network-telemetry"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/bronze"
+              - "--target_table"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
+              - "--format_type"
+              - "cloudFiles"
+              - "--stream" # Injected directly to activate infinite loops
+
+        - task_key: run_silver_cleansing
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/security/02_silver_cleansing.py
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.bronze_raw"
+              - "--geoip_table"
+              - "main.${resources.schemas.default_schema.name}.dim_geoip_lookup"
+              - "--silver_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clean"
+              - "--dlq_table"
+              - "main.${resources.schemas.default_schema.name}.silver_dlq"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/silver"
+              - "--stream"
+
+        - task_key: run_gold_analysis
+          environment_key: default
+          spark_python_task:
+            python_file: ../src/security/03_gold_security_alerts.py
+            parameters:
+              - "--source_table"
+              - "main.${resources.schemas.default_schema.name}.silver_clean"
+              - "--gold_table"
+              - "main.${resources.schemas.default_schema.name}.gold_alerts"
+              - "--checkpoint_path"
+              - "/Volumes/main/${resources.schemas.default_schema.name}/udp_stream_volume/checkpoints/gold"
+              - "--stream"

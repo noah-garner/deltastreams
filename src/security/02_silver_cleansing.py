@@ -36,7 +36,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
     is_wrapper_corrupt = col("message").isNull()
     is_network_noise = col("message").contains("Received disconnect") | col("message").contains("Bye Bye")
     is_initial_dlq = is_wrapper_corrupt | is_network_noise
-
     initial_dlq_df = (base_enriched_df
         .filter(is_initial_dlq)
         .withColumn("_dlq_reason",
@@ -46,7 +45,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
     )
 
     valid_raw_df = base_enriched_df.filter(~is_initial_dlq)
-
     regex_pattern = r"(?:Disconnected from (?:invalid user |authenticating user )?|Invalid user )([\w\-]+) from ([\d\.]+)"
 
     parsed_df = (valid_raw_df
@@ -64,7 +62,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
     )
 
     is_regex_failed = (col("attacker_ip") == "") | col("attacker_ip").isNull() | col("event_timestamp").isNull()
-        
     clean_valid_df = parsed_df.filter(~is_regex_failed)
     
     regex_failed_dlq_df = parsed_df.filter(is_regex_failed).withColumn(
@@ -77,7 +74,6 @@ def run_silver_cleansing(spark_session, source_table, geoip_table, silver_table,
 
     geo_src = str(Path(geoip_table).resolve()) if (is_local and not geoip_table.startswith("main.")) else geoip_table
     dim_geoip_df = spark_session.read.format("delta").load(geo_src) if (is_local and not geoip_table.startswith("main.")) else spark_session.read.table(geoip_table)
-
     attack_octets = split(clean_valid_df.attacker_ip, r"\.")
     attacker_ip_num = (attack_octets.getItem(0).cast("long") * 16777216 +
                        attack_octets.getItem(1).cast("long") * 65536 +

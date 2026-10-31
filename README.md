@@ -90,10 +90,10 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
         set -a && source .env && set +a && ./scripts/deploy_grid.sh
 
         # Bulid geoip hash lookup table locally
-        uv run src/00_build_geoip.py
+        uv run src/security/00_build_geoip.py
 
         # Run Bronze Ingest (optional: --stream)
-        set -a && source .env && set +a && uv run src/01_bronze_ingest.py \
+        set -a && source .env && set +a && uv run src/security/01_bronze_ingest.py \
         --bootstrap_servers "dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092" \
         --topic "network-telemetry" \
         --checkpoint_path "data/checkpoints/bronze" \
@@ -103,7 +103,7 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
         --sasl_password $RP_PASSWORD
   
         # Run Silver (optional: --stream)
-        uv run src/02_silver_cleansing.py \
+        uv run src/security/02_silver_cleansing.py \
         --source_table "data/tables/bronze_raw" \
         --geoip_table "data/tables/dim_geoip_lookup" \
         --silver_table "data/tables/silver_clean" \
@@ -112,7 +112,7 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
         --is_local
 
         # Run Gold (optional: --stream)
-        uv run src/03_gold_security_alerts.py \
+        uv run src/security/03_gold_security_alerts.py \
         --source_table "data/tables/silver_clean" \
         --gold_table "data/tables/gold_alerts" \
         --checkpoint_path "data/checkpoints/gold" \
@@ -146,7 +146,7 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
     ```bash
 
         # Copy geoip files to cloud volume (clear other dirs from data first)
-        databricks fs cp -r ./data/ dbfs:/Volumes/main/dev/udp_stream_volume/raw_sources/
+        databricks fs cp -r ./data/ dbfs:/Volumes/main/dev_security/udp_stream_volume/raw_sources/
 
         # Deploy bundle and run build_geoip_dimension (Do this whenever you update your geoip files)
         databricks bundle deploy -t prod && databricks bundle run build_geoip_dimension
