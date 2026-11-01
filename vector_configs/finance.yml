@@ -1,0 +1,24 @@
+# vector_configs/finance.yml
+data_dir: "./data/vector"
+
+sources:
+  market_telemetry_in:
+    type: "file"
+    include: ["./data/market.log"]
+    read_from: "beginning"
+
+sinks:
+  kafka_out:
+    type: "kafka"
+    inputs: ["market_telemetry_in"]
+    bootstrap_servers: "dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092"
+    topic: "liquidity_transactions"
+    encoding:
+      codec: "json"
+    tls:
+      enabled: true
+    sasl:
+      enabled: true
+      mechanism: "SCRAM-SHA-256"
+      username: "${RP_USER}"
+      password: "${RP_PASSWORD}"

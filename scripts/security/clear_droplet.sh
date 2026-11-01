@@ -3,7 +3,7 @@
 TARGET_IP=$1
 if [ -z "$TARGET_IP" ]; then
     echo "Error: Missing target IP address to purge."
-    echo "Usage: ./clear_droplet.sh <public_ip>"
+    echo "Usage: ./clear_droplet.sh <target_ip>"
     exit 1
 fi
 

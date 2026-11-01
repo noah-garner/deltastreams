@@ -44,6 +44,13 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
     └─────────────────────────────────────────────────────────┘
 ```
 
+### Vertical Agnostic Blueprint Layout
+
+DeltaStreams is designed as a universal, vertical-agnostic ingestion methodology. This repository showcases its deployment across two entirely separate enterprise use cases:
+
+1. **Security Infrastructure Telemetry:** Ingesting high-velocity host authorization records to surface real-time windowed brute-force profile alerts.
+2. **Quantitative Financial Microstructure Telemetry:** Streaming low-latency JSON executions from market WebSockets directly into PySpark analytical arrays to feed machine learning Random Forests.
+
 To optimize development velocity and eliminate cloud compute waste, DeltaStreams implements a decoupled, environment-fluid trigger engine. The exact same business logic transitions seamlessly between local development and cloud production runtimes without code changes.
 
 ```text
@@ -74,17 +81,38 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
 
 1. Requirements
 
-    * Databricks CLI installed & configured
-
     * Python 3.10+ & uv package manager
 
-    * Redpanda Account & existing `network-telemetry` topic with open read write permissions on current user.
+    * Databricks CLI installed & configured
 
-    * Atleast 1 Digital Ocean Droplet
+    * Redpanda CLI installed and configured
+
+    * Vector
+
+    * (Optional) Atleast 1 DigitalOcean Droplet
 
 2. Run Locally
 
     ```bash
+
+        # Download redpanda cli utility and create a topic (`consume` to watch, or `create` topic)
+        rpk topic create liquidity_transactions \
+            --brokers dba14vv73u5jpihrnbug.any.us-west-2.mpx.prd.cloud.redpanda.com:9092 \
+            --user "$RP_USER" \
+            --password "$RP_PASSWORD" \
+            --sasl-mechanism SCRAM-SHA-256 \
+            --tls-enabled
+
+        # SCP any files needed (for example the fetch_feed.py for the coingecko finance demo and run it)
+        scp -i ~/.ssh/id_digitalocean ./scripts/finance/fetch_feed.py root@167.71.156.175:/usr/local/bin/fetch_feed.py
+        ssh -i ~/.ssh/id_digitalocean root@167.71.156.175 "nohup python3 /usr/local/bin/fetch_feed.py > /var/log/market_feed.out 2>&1 &"
+
+        # Create the local data directory and log tracking file before running Vector
+        mkdir -p ./data && touch ./data/market.log
+
+        # Run vector locally (finance demo) and run the finance_feed
+        set -a && source .env && set +a && vector --config ./vector_configs/finance.yml --dangerously-allow-env-var-interpolation
+        uv run scripts/finance/fetch_feed.py
 
         # Deploy vector to digital ocean droplets (make sure to update the script's IP addresses)
         set -a && source .env && set +a && ./scripts/deploy_grid.sh
