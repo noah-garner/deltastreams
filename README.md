@@ -49,6 +49,7 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 DeltaStreams is designed as a universal, vertical-agnostic ingestion methodology. This repository showcases its deployment across two entirely separate enterprise use cases:
 
 1. **Security Infrastructure Telemetry:** Ingesting high-velocity host authorization records to surface real-time windowed brute-force profile alerts.
+    * **Watch the System Design Walkthrough and Enterprise Threat Intelligence Demo:** [DeltaStreams: Reference Architecture for Low-Cost Telemetry Pipelines](https://www.youtube.com/watch?v=nb8zwPWhrRw)
 2. **Quantitative Financial Microstructure Telemetry:** Streaming low-latency JSON executions from market WebSockets directly into PySpark analytical arrays to feed machine learning Random Forests.
 
 To optimize development velocity and eliminate cloud compute waste, DeltaStreams implements a decoupled, environment-fluid trigger engine. The exact same business logic transitions seamlessly between local development and cloud production runtimes without code changes.
