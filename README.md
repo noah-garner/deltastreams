@@ -146,6 +146,15 @@ To optimize development velocity and eliminate cloud compute waste, DeltaStreams
         --gold_table "data/tables/gold_alerts" \
         --checkpoint_path "data/checkpoints/gold" \
         --is_local
+
+        # Clear Local Pipeline
+        docker compose down -v && rm -f ./data/market.log && rm -rf ./data/vector/*
+
+        # Start Fresh Pipe into Redpanda
+        docker compose up -d
+        uv run python scripts/finance/fetch_feed.py
+        vector --config ./vector_configs/finance.yml
+
     ```
 
 3. Inspect Data Locally
