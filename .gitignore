@@ -6,6 +6,7 @@ __pycache__/
 .vscode/
 .env
 notes/
+notebooks/
 
 # Databricks & Local Runtime
 .databricks/
