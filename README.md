@@ -1,4 +1,4 @@
-# DeltaStreams
+# Fiji
 
 > **A unified, production-grade edge-to-lakehouse streaming reference architecture built with Databricks Automation Bundles (DABs), Vector Edge Listeners, Redpanda Brokers, and Delta Lake.**
 
@@ -6,7 +6,7 @@
 
 ## Architecture Overview
 
-DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture** that processes high-velocity network telemetry streams and enforces structural data quality gates without disrupting downstream analytics.
+Fiji demonstrates a fault-tolerant, low-latency **Medallion Architecture** that processes high-velocity network telemetry streams and enforces structural data quality gates without disrupting downstream analytics.
 
 ```text
 
@@ -46,13 +46,13 @@ DeltaStreams demonstrates a fault-tolerant, low-latency **Medallion Architecture
 
 ### Vertical Agnostic Blueprint Layout
 
-DeltaStreams is designed as a universal, vertical-agnostic ingestion methodology. This repository showcases its deployment across two entirely separate enterprise use cases:
+Fiji is designed as a universal, vertical-agnostic ingestion methodology. This repository showcases its deployment across two entirely separate enterprise use cases:
 
 1. **Security Infrastructure Telemetry:** Ingesting high-velocity host authorization records to surface real-time windowed brute-force profile alerts.
-    * **Watch the System Design Walkthrough and Enterprise Threat Intelligence Demo:** [DeltaStreams: Reference Architecture for Low-Cost Telemetry Pipelines](https://www.youtube.com/watch?v=nb8zwPWhrRw)
+    * **Watch the System Design Walkthrough and Enterprise Threat Intelligence Demo:** [Fiji: Reference Architecture for Low-Cost Telemetry Pipelines](https://www.youtube.com/watch?v=nb8zwPWhrRw)
 2. **Quantitative Financial Microstructure Telemetry:** Streaming low-latency JSON executions from market WebSockets directly into PySpark analytical arrays to feed machine learning Random Forests.
 
-To optimize development velocity and eliminate cloud compute waste, DeltaStreams implements a decoupled, environment-fluid trigger engine. The exact same business logic transitions seamlessly between local development and cloud production runtimes without code changes.
+To optimize development velocity and eliminate cloud compute waste, Fiji implements a decoupled, environment-fluid trigger engine. The exact same business logic transitions seamlessly between local development and cloud production runtimes without code changes.
 
 ```text
 
