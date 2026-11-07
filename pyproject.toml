@@ -1,16 +1,13 @@
 [project]
-name = "fiji"
+name = "fluid"
 version = "0.1.0"
 description = "Real-time honeypot security telemetry stream data pipeline built with Vector, Redpanda, and Databricks"
 requires-python = ">=3.10,<3.12"
 dependencies = [
-    "pyspark==3.5.0",
-    "delta-spark==3.1.0",
     "ipykernel>=6.0.0",
     "pandas>=2.0.0",
     "pyarrow>=12.0.0",
     "websocket-client>=1.9.2",
-    "deltalake>=1.6.6",
     "polars>=2.0.0",
     "kafka-python>=3.0.12",
     "duckdb>=1.5.6",
